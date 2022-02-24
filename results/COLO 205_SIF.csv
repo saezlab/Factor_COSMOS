@@ -1,0 +1,24 @@
+Node1,Sign,Node2,Weight
+TP53,1,P4HA2,1
+PRKACA,-1,CAD,1
+PLK1,-1,TP53,1
+Metab__L-Aspartic acid_c,1,Enzyme3634__GAD1,1
+Enzyme3634__GAD1,1,Metab__beta-Alanine_c,1
+Enzyme8423__P4HA2,1,Metab__Butanedioic acid_c,1
+Enzyme5635__CAD_reverse,1,Metab__L-Aspartic acid_c,1
+P4HA2,1,Enzyme8423__P4HA2,1
+CAD,1,Enzyme5635__CAD_reverse,1
+STAT1,1,ARNT,1
+EIF2AK2,1,PLK1,1
+ARNT,1,PFKL,1
+PLK1,1,PRKACA,1
+ARNT,1,PGM1,1
+STAT1,1,EIF2AK2,1
+Enzyme3734__PGM1,1,Metab__Glucose 6-phosphate_c,1
+Metab__Glyceraldehyde_c,1,Enzyme3846__ALDH7A1,1
+Enzyme3846__ALDH7A1,1,Metab__Glyceric acid_c,1
+HC00664,1,Enzyme4834__ALDOC,1
+Enzyme4834__ALDOC,1,Metab__Glyceraldehyde_c,1
+Enzyme1618__PFKL_reverse,1,HC00664,1
+PGM1,1,Enzyme3734__PGM1,1
+PFKL,1,Enzyme1618__PFKL_reverse,1

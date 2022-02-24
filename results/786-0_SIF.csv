@@ -1,0 +1,29 @@
+Node1,Sign,Node2,Weight
+SND1,-1,MGLL,1
+FGFR1,1,LDHA,1
+MAPK14,-1,FGFR1,0.5
+EPAS1,1,SLC2A1,1
+MYC,1,SLC2A1,1
+HIF1A,1,SLC2A1,1
+EGR1,1,FN1,0.5
+Metab__D-Glucose_c,1,Enzyme1338__AKR1A1,0.333333333333333
+Enzyme1338__AKR1A1,1,Metab__D-Glucitol_c,0.333333333333333
+Metab__Glycerol_c,1,Enzyme3843__orphanReacNA,1
+Enzyme3843__orphanReacNA,1,Metab__Glycerophosphoric acid I_c,1
+Enzyme9197__MGLL,1,Metab__Glycerol_c,1
+Enzyme7338__LDHB_LDHA_reverse,1,Metab__L-Lactic acid_c,1
+Enzyme9049__SLC2A1_reverse,1,Metab__D-Glucose_c,1
+MGLL,1,Enzyme9197__MGLL,1
+LDHA,1,Enzyme7338__LDHB_LDHA_reverse,1
+SLC2A1,1,Enzyme9049__SLC2A1_reverse,1
+MAPK14,1,MAPKAPK5,0.5
+MAPKAPK5,1,SND1,1
+FN1,-1,MAPK14,0.5
+Metab__D-Glucose_c,1,Enzyme1338__AKR1B1,0.333333333333333
+Enzyme1338__AKR1B1,1,Metab__D-Glucitol_c,0.333333333333333
+MAPK1,-1,FGFR1,0.5
+Metab__D-Glucitol_c,1,MAPK14,0.5
+MAPK1,1,MAPKAPK5,0.5
+MAPK14,-1,MAPK1,0.5
+Metab__D-Glucose_c,1,Enzyme1338__AKR7A2,0.333333333333333
+Enzyme1338__AKR7A2,1,Metab__D-Glucitol_c,0.333333333333333

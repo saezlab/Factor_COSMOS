@@ -1,0 +1,8 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+.DS_Store
+omnipathr-log/**
+data/RNA/RNA_log2_FPKM.csv
+data/metabolomic/WEB_DATA_METABOLON.TXT
