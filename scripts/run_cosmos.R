@@ -13,10 +13,8 @@ sig_input <- cosmos_inputs[[cell_line]]$TF_scores
 metab_input <- cosmos_inputs[[cell_line]]$metabolomic
 RNA_input <- cosmos_inputs[[cell_line]]$RNA
 
-compartment_code <- "_c"
-
-names(metab_input) <- paste(names(metab_input),compartment_code, sep = "")
-names(metab_input) <- paste("Metab__",names(metab_input),sep = "")
+#Choose which compartment to assign to the metabolic measurments
+metab_input <- prepare_metab_inputs(metab_input, c("c","m"))
 
 ##Filter sugnificant inputs
 sig_input <- sig_input[abs(sig_input) > 2]
