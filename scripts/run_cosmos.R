@@ -41,7 +41,7 @@ my_options$threads <- 6
 
 metab_input <- cosmosR:::filter_input_nodes_not_in_pkn(metab_input, meta_network)
 sig_input <- cosmosR:::filter_input_nodes_not_in_pkn(sig_input, meta_network)
-
+my_options$keepLPFiles = TRUE
 test_for <- preprocess_COSMOS_signaling_to_metabolism(meta_network = meta_network,
                                                       signaling_data = sig_input,
                                                       metabolic_data = metab_input,
