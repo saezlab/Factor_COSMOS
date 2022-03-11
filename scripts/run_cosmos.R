@@ -1,3 +1,9 @@
+
+# make sure that CARNIVAL and COSMOS are installed from github:
+if(!require("remotes")) install.packages("remotes")
+remotes::install_github("saezlab/CARNIVAL")
+remotes::install_github("saezlab/COSMOS@new_PKN")
+
 library(cosmosR)
 library(readr)
 library(dplyr)
@@ -16,13 +22,13 @@ RNA_input <- cosmos_inputs[[cell_line]]$RNA
 #Choose which compartment to assign to the metabolic measurments
 metab_input <- prepare_metab_inputs(metab_input, c("c","m"))
 
-##Filter sugnificant inputs
+##Filter significant inputs
 sig_input <- sig_input[abs(sig_input) > 2]
 metab_input <- metab_input[abs(metab_input) > 2]
 
 #In order to adapt options to users specification we can load them into a variable 
 #that will then be passed to preprocess_COSMOS_signaling_to_metabolism CARNIVAL_options parameter
-my_options <- default_CARNIVAL_options()
+my_options <- default_CARNIVAL_options(solver = "cbc")
 
 #Here the user should provide a path to its CPLEX executable (only cplex at the moment, other solvers will be documented soon !)
 # my_options$solverPath <- "~/Documents/cplex" #or cbc solver executable
@@ -35,7 +41,7 @@ my_options$threads <- 6
 
 metab_input <- cosmosR:::filter_input_nodes_not_in_pkn(metab_input, meta_network)
 sig_input <- cosmosR:::filter_input_nodes_not_in_pkn(sig_input, meta_network)
-
+my_options$keepLPFiles = TRUE
 test_for <- preprocess_COSMOS_signaling_to_metabolism(meta_network = meta_network,
                                                       signaling_data = sig_input,
                                                       metabolic_data = metab_input,
@@ -43,9 +49,7 @@ test_for <- preprocess_COSMOS_signaling_to_metabolism(meta_network = meta_networ
                                                       maximum_network_depth = 4,
                                                       remove_unexpressed_nodes = T,
                                                       filter_tf_gene_interaction_by_optimization = T,
-                                                      CARNIVAL_options = my_options
-                                                      
-)
+                                                      CARNIVAL_options = my_options)
 
 my_options$timelimit <- 7200
 
@@ -65,6 +69,9 @@ write_csv(ATT, file = paste("results/",paste(cell_line, "_ATT.csv",sep = ""), se
 
 my_options$timelimit <- 1800
 
+
+meta_network <- meta_network[-which(meta_network$source == meta_network$target),]
+
 test_back <- preprocess_COSMOS_metabolism_to_signaling(meta_network = meta_network,
                                                       signaling_data = sig_input,
                                                       metabolic_data = metab_input,
@@ -72,9 +79,7 @@ test_back <- preprocess_COSMOS_metabolism_to_signaling(meta_network = meta_netwo
                                                       maximum_network_depth = 4,
                                                       remove_unexpressed_nodes = T,
                                                       filter_tf_gene_interaction_by_optimization = T,
-                                                      CARNIVAL_options = my_options
-                                                      
-)
+                                                      CARNIVAL_options = my_options)
 
 my_options$timelimit <- 7200
 
