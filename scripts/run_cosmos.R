@@ -2,7 +2,7 @@
 # make sure that CARNIVAL and COSMOS are installed from github:
 if(!require("remotes")) install.packages("remotes")
 remotes::install_github("saezlab/CARNIVAL")
-remotes::install_github("saezlab/COSMOS@new_PKN")
+remotes::install_github("saezlab/COSMOS")
 
 library(cosmosR)
 library(readr)
@@ -60,6 +60,8 @@ formatted_res <- format_COSMOS_res(test_result_for)
 
 SIF <- formatted_res[[1]]
 ATT <- formatted_res[[2]]
+
+SIF <- SIF[which(SIF$Weight != 0),]
 
 RNA_input_df <- data.frame(Nodes = names(RNA_input), t = RNA_input)
 ATT <- merge(ATT, RNA_input_df, all.x = T)
