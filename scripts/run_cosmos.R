@@ -27,11 +27,7 @@ RNA_input <- cosmos_inputs[[cell_line]]$RNA
 metab_input <- prepare_metab_inputs(metab_input, c("c","m"))
 
 ##Filter significant inputs
-<<<<<<< HEAD
-sig_input <- sig_input[abs(sig_input) > 1]
-=======
 sig_input <- sig_input[abs(sig_input) > 2]
->>>>>>> 232f5a86e901c90b1f67b36b155af86a9bc9b2a7
 metab_input <- metab_input[abs(metab_input) > 2]
 
 #In order to adapt options to users specification we can load them into a variable 
