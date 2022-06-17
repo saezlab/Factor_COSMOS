@@ -1,8 +1,7 @@
 
 # make sure that CARNIVAL and COSMOS are installed from github:
 # if(!require("remotes")) install.packages("remotes")
-remotes::install_github("saezlab/CARNIVAL")
-remotes::install_github("saezlab/cosmosR", force = TRUE)
+remotes::install_github("saezlab/cosmosR")
 
 library(cosmosR)
 library(readr)
