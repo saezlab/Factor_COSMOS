@@ -1,8 +1,7 @@
 
 # make sure that CARNIVAL and COSMOS are installed from github:
 # if(!require("remotes")) install.packages("remotes")
-remotes::install_github("saezlab/CARNIVAL")
-remotes::install_github("saezlab/cosmosR", force = TRUE)
+remotes::install_github("saezlab/cosmosR")
 
 library(cosmosR)
 library(readr)
@@ -27,7 +26,7 @@ RNA_input <- cosmos_inputs[[cell_line]]$RNA
 metab_input <- prepare_metab_inputs(metab_input, c("c","m"))
 
 ##Filter significant inputs
-sig_input <- sig_input[abs(sig_input) > 2]
+sig_input <- sig_input[abs(sig_input) > 1]
 metab_input <- metab_input[abs(metab_input) > 2]
 
 #In order to adapt options to users specification we can load them into a variable 
@@ -51,7 +50,7 @@ test_for <- preprocess_COSMOS_signaling_to_metabolism(meta_network = meta_networ
                                                       signaling_data = sig_input,
                                                       metabolic_data = metab_input,
                                                       diff_expression_data = RNA_input,
-                                                      maximum_network_depth = 4,
+                                                      maximum_network_depth = 5,
                                                       remove_unexpressed_nodes = T,
                                                       filter_tf_gene_interaction_by_optimization = T,
                                                       CARNIVAL_options = my_options)
