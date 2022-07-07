@@ -11,6 +11,7 @@ data("meta_network")
 
 #Seems to be an error in omnipath
 meta_network <- meta_network[-which(meta_network$source == "PRKCA" & meta_network$target == "SRC"),]
+meta_network <- meta_network[-which(meta_network$source == meta_network$target),]
 
 load("data/cosmos/cosmos_inputs.RData")
 
@@ -26,7 +27,7 @@ RNA_input <- cosmos_inputs[[cell_line]]$RNA
 metab_input <- prepare_metab_inputs(metab_input, c("c","m"))
 
 ##Filter significant inputs
-sig_input <- sig_input[abs(sig_input) > 1]
+sig_input <- sig_input[abs(sig_input) > 4]
 metab_input <- metab_input[abs(metab_input) > 2]
 
 #In order to adapt options to users specification we can load them into a variable 
@@ -39,7 +40,7 @@ my_options <- default_CARNIVAL_options(solver = "cbc")
 my_options$solverPath <- "cbc/cbc-osx/cbc" #or cbc solver executable
 # my_options$solver <- "cplex" #or cbc
 my_options$solver <- "cbc"
-my_options$timelimit <- 3600*0.5
+my_options$timelimit <- 3600/10
 my_options$mipGAP <- 0.05
 my_options$threads <- 6
 
@@ -50,12 +51,12 @@ test_for <- preprocess_COSMOS_signaling_to_metabolism(meta_network = meta_networ
                                                       signaling_data = sig_input,
                                                       metabolic_data = metab_input,
                                                       diff_expression_data = RNA_input,
-                                                      maximum_network_depth = 5,
+                                                      maximum_network_depth = 4,
                                                       remove_unexpressed_nodes = T,
                                                       filter_tf_gene_interaction_by_optimization = T,
                                                       CARNIVAL_options = my_options)
 
-my_options$timelimit <- 3600*2
+my_options$timelimit <- 3600/10
 
 test_result_for <- run_COSMOS_signaling_to_metabolism(data = test_for,
                                                       CARNIVAL_options = my_options)
@@ -75,24 +76,20 @@ ATT <- ATT[ATT$AvgAct != 0,]
 write_csv(SIF, file = paste("results/",paste(cell_line, "_SIF.csv",sep = ""), sep = ""))
 write_csv(ATT, file = paste("results/",paste(cell_line, "_ATT.csv",sep = ""), sep = ""))
 
-my_options$timelimit <- 3600*0.5
+############################
 
-
-meta_network <- meta_network[-which(meta_network$source == meta_network$target),]
-
-
-meta_network <- meta_network[-which(meta_network$source == meta_network$target),]
+my_options$timelimit <- 3600/10
 
 test_back <- preprocess_COSMOS_metabolism_to_signaling(meta_network = meta_network,
                                                       signaling_data = sig_input,
                                                       metabolic_data = metab_input,
                                                       diff_expression_data = RNA_input,
-                                                      maximum_network_depth = 4,
+                                                      maximum_network_depth = 3,
                                                       remove_unexpressed_nodes = T,
                                                       filter_tf_gene_interaction_by_optimization = T,
                                                       CARNIVAL_options = my_options)
 
-my_options$timelimit <- 3600*2
+my_options$timelimit <- 3600/10
 
 test_result_back <- run_COSMOS_metabolism_to_signaling(data = test_back,
                                                       CARNIVAL_options = my_options)

@@ -1,15 +1,17 @@
 Node1,Sign,Node2,Weight
-BSG,1,Enzyme757700002__BSG,1
-CAV1,-1,BSG,1
-EGFR,1,CAV1,1
-Enzyme1338__AKR1B1,1,Metab__D-Glucitol_c,1
-Enzyme757700002__BSG,1,Metab__L-Lactic acid_c,1
+FGFR1,1,LDHA,1
+Enzyme1338__AKR7A2,1,Metab__D-Glucitol_c,1
+Enzyme7338__LDHB_LDHA_reverse,1,Metab__L-Lactic acid_c,1
 Enzyme9047__SLC2A1,1,Metab__D-Glucose_c,1
 Enzyme918200002__SLC16A1,1,Metab__L-Lactic acid_m,1
-JUN,-1,TP53,1
-Metab__D-Glucose_c,1,Enzyme1338__AKR1B1,1
+HIF1A,1,SLC2A1,1
+LDHA,1,Enzyme7338__LDHB_LDHA_reverse,1
+MAPK1,-1,FGFR1,1
+MAPK14,-1,MAPK1,1
+MAPK14,1,JUN,1
+MAPK14,1,MYC,1
+Metab__D-Glucose_c,1,Enzyme1338__AKR7A2,1
 Metab__L-Lactic acid_c,1,Enzyme918200002__SLC16A1,1
-PPARG,1,TP53,1
+Metab__D-Glucitol_c,1,MAPK14,1
+MYC,1,SLC2A1,1
 SLC2A1,1,Enzyme9047__SLC2A1,1
-TP53,-1,SLC2A1,1
-TP53,1,EGFR,1
