@@ -39,7 +39,7 @@ RNA_scaled <- (RNA_log2_FPKM_cleaned_common - means) / SDs
 doro_regulons <- get_dorothea(levels = c("A","B"))
 
 ## This is were TF activities are estiamted from transcriptomic data, see https://github.com/saezlab/decoupler for more info
-TF_activities <- apply(RNA_log2_FPKM_cleaned_common,2,function(x){
+TF_activities <- apply(RNA_scaled,2,function(x){
                         x <- as.data.frame(x[which(!is.na(x))])
                         TFs <- run_wmean(as.matrix(x), network = doro_regulons, times = 1000, minsize = 20)
                         TFs <- as.data.frame(TFs)
