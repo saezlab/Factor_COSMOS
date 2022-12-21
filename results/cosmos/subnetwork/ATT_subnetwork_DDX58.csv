@@ -1,0 +1,3 @@
+Nodes,NodeType,ZeroAct,UpAct,DownAct,AvgAct,measured,Activity,sign_activity,mofa_weights
+DDX58,0,0.8,0,0.2,-0.2,0,-0.2,-1,NA
+IRF3,1,0,0,1,-1,1,-1,-1,-2.188369488610287

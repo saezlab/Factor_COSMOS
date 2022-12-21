@@ -1,0 +1,4 @@
+Nodes,NodeType,ZeroAct,UpAct,DownAct,AvgAct,measured,Activity,sign_activity,mofa_weights
+TEAD1,1,0,1,0,1,1,1,1,11.00726719567164
+TEAD4,1,0,1,0,1,1,1,1,7.470464861457118
+YAP1,1,0,1,0,1,1,1,1,NA

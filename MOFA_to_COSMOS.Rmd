@@ -1,0 +1,1226 @@
+---
+title: "Untitled"
+author: "Pascal Lafrenz"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r Setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Installation and dependency
+
+COSMOS is dependent on CARNIVAL for exhibiting the signalling pathway optimization. CARNIVAL requires the interactive version of IBM Cplex or CBC-COIN solver as the network optimizer. The IBM ILOG Cplex is freely available through Academic Initiative [here]{<https://community.ibm.com/community/user/datascience/blogs/xavier-nodet1/2020/07/09/cplex-free-for-students>}. As an alternative, the CBC solver is open source and freely available for any user, but has a significantly lower performance than CPLEX. The CBC executable can be find under cbc/. Alternatively for small networks, users can rely on the freely available lpSolve R-package, which is automatically installed with the package.
+
+In this tutorial we use *CPLEX* which is strongly recommended.
+
+```{r COSMOS installation, message=FALSE}
+# Install cosmosR from bioconductor (stable version)
+#if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+#BiocManager::install("cosmosR")
+
+# Or install cosmosR from github directly to obtain the newest version
+if (!requireNamespace("devtools", quietly = TRUE)) install.packages("devtools")
+if (!requireNamespace("cosmosR", quietly = TRUE)) devtools::install_github("saezlab/cosmosR")
+```
+
+We are using MOFA2 (Argelaguet et al., 2018) to find correlation between different omics and use its output (factors) to restrict COSMOS input. However, since we are using the python version of MOFA2, please make sure to have [mofapy2]{<https://github.com/bioFAM/mofapy2>} as well as panda and numpy installed in your (conda) environment. For downstream analysis, the R version of MOFA2 is used.
+
+```{r MOFA2 installation, message=FALSE}
+# Install MOFA2 from bioconductor (stable version)
+if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+if (!requireNamespace("MOFA2", quietly = TRUE)) BiocManager::install("MOFA2")
+```
+
+General information (tutorials) on how to use COSMOS and MOFA2, see [COSMOS]{<https://saezlab.github.io/cosmosR/articles/tutorial.html>} and [MOFA2]{<https://biofam.github.io/MOFA2/tutorials.html>}.
+
+For data manipulation, visualization, etc. further packages are needed which are loaded here along with MOFA2 and COSMOS.
+
+```{r Loading packages, message=FALSE}
+library(cosmosR)
+library(MOFA2)
+library(readr)
+library(ggplot2)
+library(ggfortify)
+library(dplyr)
+library(uwot)
+library(reshape2)
+library(liana)
+library(decoupleR)
+library(moon)
+library(pheatmap)
+library(gridExtra)
+library(liana)
+library(dorothea)
+library(GSEABase)
+library(tidyr)
+library(RCy3)
+```
+
+### From omics data to MOFA ready input
+
+Since extensive pre-processing is beyond the scope of this tutorial, here only the transformation of pre-processed single omics data to a long data.frame (columns: "sample", "group", "feature", "view", "value") is shown. For more details and information regarding appropriate input, please refer to the MOFA tutorial [MOFA2: training a model in R]{<https://raw.githack.com/bioFAM/MOFA2_tutorials/master/R_tutorials/getting_started_R.html>}. The raw data is accessed through [NCI60 cellminer]{<https://discover.nci.nih.gov/cellminer/home.do>} and the scripts for pre-processing can be found in the associated folder.
+
+Here, we have the following views (with samples as columns and genes as rows): transcriptomics (RNA-seq [PMID:31113817]{<https://pubmed.ncbi.nlm.nih.gov/31113817/>}), proteomics (SWATH (Mass spectrometry) [PMID:31733513]{<https://pubmed.ncbi.nlm.nih.gov/31733513/>)} and metabolomics (LC/MS & GC/MS (Mass spectrometry) [DTP NCI60 data]{<https://wiki.nci.nih.gov/display/NCIDTPdata/Molecular+Target+Data>}). The group information is stored inside the RNA metadata and based on transcription factor clustering (see scripts/RNA/Analyze_RNA.R). Further, only samples are kept for which each omic is available (however this is not necessary since MOFA2 is able to impute data).
+
+```{r Preparing MOFA input, message=FALSE}
+# Transcriptomics
+## Load data
+RNA <- as.data.frame(read_csv("data/RNA/RNA_log2_FPKM_clean.csv"))
+rownames(RNA) <- RNA[,1]
+RNA <- RNA[,-1]
+
+## Remove genes with excessive amount of NAs (only keep genes with max. amount of NAs = 33.3 % across cell lines)
+RNA <- RNA[rowSums(is.na(RNA))<(dim(RNA)[2]/3),]
+
+## Only keep highly variable genes (as suggested by MOFA): here top ≈70% genes to keep >75% of TFs (103 out of 133). For stronger selection, we can further reduce the number of genes (e.g. top 50%)
+RNA_sd <- sort(apply(RNA, 1, function(x) sd(x,na.rm = T)), decreasing = T)
+hist(RNA_sd, breaks = 100)
+hist(RNA_sd[1:6000], breaks = 100)
+RNA_sd <- RNA_sd[1:6000]
+RNA <- RNA[names(RNA_sd),]
+
+# Proteomics
+## Load data
+proteo <- as.data.frame(read_csv("data/proteomic/Prot_log10_SWATH_clean.csv"))
+rownames(proteo) <- proteo[,1]
+proteo <- proteo[,-1]
+
+## Only keep highly variable proteins (as suggested by MOFA): here top ≈60%. For stronger selection, we can further reduce the number of proteins (e.g. only keep top 50%)
+proteo_sd <- sort(apply(proteo, 1, function(x) sd(x,na.rm = T)), decreasing = T)
+hist(proteo_sd, breaks = 100)
+hist(proteo_sd[1:round(dim(proteo)[1]*3/5)], breaks = 100)
+proteo_sd <- proteo_sd[1:round(dim(proteo)[1]*3/5)]
+proteo <- proteo[names(proteo_sd),]
+
+# Metabolomics
+## Load data
+metab <- as.data.frame(read_csv("data/metabolomic/metabolomic_clean_vsn.csv"))
+rownames(metab) <- metab[,1]
+metab <- metab[,-1]
+
+## Since we have only a limited number of metabolite measurements, all measurements are kept here
+metab_sd <- apply(metab, 1, function(x) sd(x,na.rm=T))
+hist(metab_sd, breaks = 100)
+
+# Create long data frame
+## Only keep samples with each view present 
+overlap_patients <- intersect(intersect(names(RNA),names(proteo)),names(metab))
+RNA <- RNA[,overlap_patients]
+proteo <- proteo[,overlap_patients]
+metab <- metab[,overlap_patients]
+
+## Create columns required for MOFA
+### RNA
+RNA <- melt(as.data.frame(cbind(RNA,row.names(RNA))))
+RNA$view <- "RNA"
+RNA <- RNA[,c(2,1,4,3)]                 
+names(RNA) <- c("sample","feature","view","value")
+
+### Proteomics
+proteo <- melt(as.data.frame(cbind(proteo,row.names(proteo))))
+proteo$view <- "proteo"
+proteo <- proteo[,c(2,1,4,3)]                 
+names(proteo) <- c("sample","feature","view","value")
+
+### Metabolomics
+metab <- melt(as.data.frame(cbind(metab,row.names(metab))))
+metab$view <- "metab"
+metab <- metab[,c(2,1,4,3)]                 
+names(metab) <- c("sample","feature","view","value")
+
+## Merge long data frame to one
+mofa_ready_data <- as.data.frame(do.call(rbind,list(RNA,proteo,metab)))
+
+## Add metadata information (cluster assignment)
+meta_data <- read_csv("data/metadata/RNA_metadata_cluster.csv")[,c(1,2)]
+colnames(meta_data) <- c("sample","cluster")
+mofa_ready_data <- merge(mofa_ready_data, meta_data, by = "sample")
+mofa_ready_data <- mofa_ready_data[,c(1,5,2,3,4)]
+names(mofa_ready_data) <- c("sample","group","feature","view","value")
+
+# Rename clusters
+mofa_ready_data[grepl("1",mofa_ready_data$group),2] <- "cluster_1"
+mofa_ready_data[grepl("2",mofa_ready_data$group),2] <- "cluster_2"
+mofa_ready_data[grepl("3",mofa_ready_data$group),2] <- "cluster_3"
+
+# Optional: Only keep cluster 1 and 3
+#mofa_ready_data <- mofa_ready_data[which(mofa_ready_data$group %in% c("1","3")),]
+
+# Here: Remove group column for unsupervised analysis
+mofa_ready_data <- mofa_ready_data[,-2]
+
+# Save MOFA metadata information and MOFA input
+write_csv(mofa_ready_data, file = "data/mofa/mofa_data.csv")
+```
+
+The final data frame has the following structure:
+
+```{r MOFA_input}
+head(mofa_ready_data)
+```
+
+We have successfully combined single omic data sets to a long multi-omics data frame.
+
+### MOFA run
+
+After pre-processing the data into MOFA appropriate input, let's perform the MOFA analysis. To change specific MOFA options the function write_MOFA_options_file is used. For more information regarding option setting see [MOFA option tutorial]{<https://raw.githack.com/bioFAM/MOFA2_tutorials/master/R_tutorials/getting_started_R.html>}. Since we don't know how many factors are needed to explain our data well, various maximum numbers of factors are tested. The final results can be found in the results/mofa/ folder.
+
+```{r MOFA options function, include=FALSE}
+write_MOFA_options_file <- function(input_file, 
+                                    output_file, 
+                                    scale_groups = "False", 
+                                    scale_views = "False", 
+                                    likelihoods = c('gaussian','gaussian','gaussian','gaussian'),
+                                    factors = "5", 
+                                    spikeslab_weights = "True",
+                                    spikeslab_factors = "False",
+                                    ard_factors = "True",
+                                    ard_weights = "True",
+                                    iter = "1000",
+                                    convergence_mode = "fast",
+                                    startELBO = "1",
+                                    freqELBO = "1",
+                                    dropR2 = "0.001", 
+                                    gpu_mode = "True", 
+                                    verbose = "False", 
+                                    seed = "1") {
+  wd <- getwd()
+  options_MOFA <- data.frame("input_file" = paste0(wd,input_file), 
+                        "output_file" = paste0(wd,output_file), 
+                        scale_groups, 
+                        scale_views,
+                        factors,
+                        spikeslab_weights,
+                        spikeslab_factors,
+                        ard_factors,
+                        ard_weights,
+                        iter,
+                        convergence_mode,
+                        startELBO,
+                        freqELBO,
+                        dropR2,
+                        gpu_mode,
+                        verbose,
+                        seed,
+                        "length" = length(likelihoods))
+  for (i in 1:length(likelihoods)){
+    cache <- paste0("likelihood","_",i)
+    options_MOFA[,cache] <- likelihoods[i]
+  }
+  write_csv(options_MOFA, 
+            "options_MOFA.csv"
+            )
+}
+```
+
+```{r MOFA run}
+#for(i in c(1:length(unique(mofa_ready_data$sample)))){
+for(i in c(5:15,20,length(unique(mofa_ready_data$sample)))){
+wd <- getwd()
+write_MOFA_options_file(input_file = '/data/mofa/mofa_data.csv', output_file = paste0('/results/mofa/mofa_res_',i,'factor.hdf5'), factors = i, convergence_mode = "slow", likelihoods = c('gaussian','gaussian','gaussian'))
+system(paste0(paste('python3', wd, sep = " "), paste('/scripts/mofa/mofa2.py', "options_MOFA.csv")))
+}
+```
+
+### Investigate MOFA output
+
+We first load the different MOFA models containing the MOFA results together with the metadata information.
+
+```{r Loading MOFA output, message=FALSE}
+# Load MOFA output
+for(i in c(5:15,20,length(unique(mofa_ready_data$sample)))){
+  filepath <- paste0('results/mofa/mofa_res_',i,'factor.hdf5')
+  model <- load_model(filepath)
+  meta_data <- read_csv("data/metadata/RNA_metadata_cluster.csv")[,c(1,2)]
+  colnames(meta_data) <- c("sample","cluster")
+  mofa_metadata <- merge(samples_metadata(model), meta_data, by = "sample")
+  names(mofa_metadata) <- c("sample","group","cluster")
+  samples_metadata(model) <- mofa_metadata
+  assign(paste0("model",i),model)
+}
+```
+
+Then, we can compare the factors from different MOFA models and check on consistency (here: model 7-13).
+
+```{r Compare MOFA models}
+compare_factors(list(model7,model8,model9,model10,model11,model12,model13), cluster_rows = F, cluster_cols = F,)
+```
+Here, we can see that the inferred MOFA factor weights do not change drastically around 10. For the sake of this tutorial, we choose the 10-factor MOFA model.
+
+```{r Select MOFA model}
+model <- model10
+```
+
+The next part deals with the analysis and interpretation of the MOFA factors with specific focus on the factor weights. A more detailed tutorial on how to perform downstream analysis after MOFA model training can be found here [MOFA+: downstream analysis (in R)]{<https://raw.githack.com/bioFAM/MOFA2_tutorials/master/R_tutorials/downstream_analysis.html>}. In this context, it is important to emphasize that the factors can be interpreted similarly to principal components (PCs) in a principal component analysis (PCA).
+
+An initial metric we can explore is the total variance ($R^2$) explained per view by our MOFA model. This helps us understand how well the model represents the data.
+
+```{r Total variance per factor}
+# Investigate factors: Explained total variance per view
+plot_variance_explained(model, x="group", y="factor", plot_total = T)[[2]]
+```
+
+The bar plot demonstrates that the nine factors for the view RNA explain more than 50% of the variance. In contrast, for both metabolomics as well as proteomics around 20% of the variance can be explained by all factors.
+
+Since we would like to use the found correlation for downstream COSMOS analysis, we first investigate the variance ($R^2$) each factor can explain per view as well as investigate the factor explaining the most variance across all views.
+
+```{r Variance per view per factor}
+# Investigate factors: Explained variance per view for each factor 
+pheatmap(model@cache$variance_explained$r2_per_factor[[1]], display_numbers = T, angle_col = "0", legend_labels = c("0","10", "20", "30", "40", "Variance\n\n"), legend = T, main = "", legend_breaks = c(0,10, 20, 30, 40, max(model@cache$variance_explained$r2_per_factor[[1]])), cluster_rows = F, cluster_cols = F, color = colorRampPalette(c("white","red"))(100), fontsize_number = 10)
+```
+
+By analyzing this heatmap, we can observe that Factor 1 and 3 explain a large proportion of variance of the RNA, Factor 2 mainly explains the variance of the metabolomics and Factor 3 highlights variability from the proteomics view. Consequently, no factor explains a large portion of the variance across all views. To potentially justify to use different factor weights downstream for different views, we can analyze the correlation between factors. Thus, the next plot highlights the spearman correlation between each factor.
+
+```{r Correlation between factors}
+# Investigate factors: Correlation between factors 
+plot_factor_cor(model, type = 'upper', method = "spearman", addCoef.col = "grey")
+```
+
+Since the correlation between each factor is relatively low, we have to choose a single factor. In this case, we are going to use Factor 4, since a decent amount of variability from each view is explained.
+
+Additionally, we can use a beeswarm plot to examine each sample's factor value and to see if we are able to separate the samples based on their transcription factor clustering.
+
+```{r Factor value per sample and factor}
+# Investigate factors: Beeswarm plots of individual factors
+plot_factor(model, 
+                 factors = 'all',
+                 color_by = "cluster",
+                 dot_size = 3,
+                 dodge = T,           
+                 legend = T,          
+                 add_violin = T,     
+                 violin_alpha = 0.25) + 
+   scale_color_manual(values=c("1"="red", "2"="cyan", "3"="orange")) +
+   scale_fill_manual(values=c("1"="red", "2"="cyan", "3"="orange"))
+
+plot_factor(model, 
+                 factors = 'all',
+                 dot_size = 3,
+                 dodge = T,           
+                 legend = T,          
+                 add_violin = T,     
+                 violin_alpha = 0.25)
+```
+
+Interestingly, with Factor 4, we have a separation of the samples belonging to cluster 2 from samples of cluster 1 and 3. Taking into account that this factor mainly explains the variation in the RNA view, the samples are classifiable into the clusters especially by transcriptomics. This is expected since the assignment of the samples was done based on transcription factor clustering via transcriptomics. Thus, it was shown that the original structure of the data was conserved in the low-dimensional representation via factors.
+
+Further, we can inspect the composition of the factors by plotting the top 20 weights per factor and view.
+
+```{r Factor weights per view, fig.height=5, fig.width=5}
+## Top 20 factor weights per view
+grid.arrange(
+  ### RNA
+  plot_top_weights(model, 
+                   view = "RNA",
+                   factor = 4,
+                   nfeatures = 20) +
+    ggtitle("RNA"),
+  ### Proteomics
+  plot_top_weights(model, 
+                   view = "proteo",
+                   factor = 4,
+                   nfeatures = 20) + 
+    ggtitle("Proteomics"),
+  ### Metabolomics
+  plot_top_weights(model, 
+                   view = "metab",
+                   factor = 4,
+                   nfeatures = 20) + 
+    ggtitle("Metabolomics")
+)
+
+```
+
+Using this visualization, features with strong association with the factor (large absolute values) can be easily identified and further inspected by literature investigation.
+
+Moreover, we can use heatmaps to highlight the coordinated heterogeneity that MOFA captures in the original data and define clusters by hierarchical clustering. Here, for example, the heatmap for Factor 4 of the RNA view using the top 100 feature is shown and hierarchical clustering with complete linkage is performed. Additionally, the cluster assignment of each sample is depicted.
+
+```{r Heatmap RNA view factor 2}
+anno_colors <- list(
+  "1"="red", "2"="cyan", "3"="orange"
+)
+
+model@samples_metadata$cluster <- as.character(model@samples_metadata$cluster)
+### RNA
+plot_data_heatmap(model,
+                  view = "RNA",       
+                  factor = 4,             
+                  features = 100,          
+                  cluster_rows = T, cluster_cols = T,
+                  show_rownames = T, show_colnames = F,
+                  annotation_samples = "cluster",
+                  annotation_colors = anno_colors)
+```
+
+Further tools to investigate the latent factors are available inside the MOFA framework ([MOFA+: downstream analysis (in R)]{<https://raw.githack.com/bioFAM/MOFA2_tutorials/master/R_tutorials/downstream_analysis.html>}).
+
+
+### From MOFA output to TF activity, ligand-receptor activity and mOOn estimation
+
+In the next step, using the weights of Factor 4 (highest shared $R^2$ across views), different databases (liana, dorothea, moon) and decoupleR, the transcription factor activities, ligand-receptor activities as well as the activity of the master regulators are calculated.
+
+First, we have to extract the weights from our MOFA model and keep the weights from Factor 4 in the RNA view.
+
+```{r Extract weights from Model}
+weights <- get_weights(model, views = "all", factors = "all")
+
+# Extract Factor with highest explained variance in RNA view
+RNA <- data.frame(weights$RNA[,4]) 
+row.names(RNA) <- gsub("_RNA","",row.names(RNA))
+```
+
+Then we load the consensus networks from our databases.
+
+```{r Load networks, message=FALSE, warning=FALSE, error=FALSE, results='hide'}
+# Load LIANA (receptor and ligand) consensus network
+ligrec_ressource <- distinct(liana::decomplexify(liana::select_resource("Consensus")[[1]]))
+ligrec_geneset <- ligrec_ressource[,c("source_genesymbol","target_genesymbol")]
+ligrec_geneset$set <- paste(ligrec_geneset$source_genesymbol, ligrec_geneset$target_genesymbol, sep = "___")
+ligrec_geneset <- reshape2::melt(ligrec_geneset, id.vars = "set")[,c(3,1)]
+names(ligrec_geneset)[1] <- "gene"
+ligrec_geneset$mor <- 1
+ligrec_geneset$likelihood <- 1
+ligrec_geneset <- distinct(ligrec_geneset)
+
+# Load Dorothea (TF) network
+dorothea_df <- decoupleR::get_dorothea()
+
+# Load meta footprint analysis (moon) regulatory network 
+moon_regulons <- moon::build_moon_regulons()
+```
+
+Then, by using decoupleR and prior knowledge networks, we calculate the different regulatory activities inferred by the normalized weighted mean approach. Depending on the task, the minimum number of targets per source varies required to maintain the source in the output (e.g. two targets by definition for ligand-receptor interactions). To calculate activities of master regulons through moon, transcription factor activities estimated by decoupleR and dorothea are used as an input.
+
+```{r Activity estimations}
+# Calculate regulatory activities from Receptor and Ligand network
+ligrec_high_vs_low <- run_wmean(mat = as.matrix(RNA), network = ligrec_geneset, times = 1000, .source = set, .target = gene, minsize = 2, seed = 42) 
+ligrec_high_vs_low <- ligrec_high_vs_low[ligrec_high_vs_low$statistic == "norm_wmean",]
+ligrec_high_vs_low_vector <- ligrec_high_vs_low$score
+names(ligrec_high_vs_low_vector) <- ligrec_high_vs_low$source
+
+# Calculate regulatory activities from TF network
+TF_high_vs_low <- run_wmean(mat = as.matrix(RNA), network = dorothea_df, times = 1000, minsize = 10, seed = 42)
+TF_high_vs_low <- TF_high_vs_low[TF_high_vs_low$statistic == "norm_wmean",]
+TF_high_vs_low_vector <- TF_high_vs_low$score
+names(TF_high_vs_low_vector) <- TF_high_vs_low$source
+
+# Prepare moon analysis input
+TF_high_vs_low <- as.data.frame(TF_high_vs_low[,c(2,4)])
+row.names(TF_high_vs_low) <- TF_high_vs_low[,1]
+
+# Calculate TF regulatory activities from moon network
+moon_high_vs_low <- run_wmean(mat = as.matrix(TF_high_vs_low[,-1,drop = F]), network = moon_regulons, times = 1000, minsize = 10, seed = 42)
+moon_high_vs_low <- moon_high_vs_low[moon_high_vs_low$statistic == "norm_wmean",]
+moon_high_vs_low_vector <- moon_high_vs_low$score
+names(moon_high_vs_low_vector) <- moon_high_vs_low$source
+moon_high_vs_low_vector <- moon_high_vs_low_vector[!(names(moon_high_vs_low_vector) %in% names(TF_high_vs_low_vector))] #exclude all found in TF activity estimation, only keep others to prevent overpresentation
+
+# Combine results
+ligrec_TF_moon_inputs <- list("ligrec" = ligrec_high_vs_low_vector,
+                              "TF" = TF_high_vs_low_vector,
+                              "moon" = moon_high_vs_low_vector)
+```
+
+We have now successfully used the MOFA weights (Factor 4, RNA view) to infer not only TF activities but also the activities of master regulators and ligand-receptor interactions.
+
+### Extracting network with COSMOS to formulate mechanistic hypotheses
+
+In this part the COSMOS run is performed. We can use the output of decoupleR (the activities) next to the factor weights as an input for COSMOS to specifically focus the analysis on pre-computed data-driven results.
+
+Here, in the first step, the data is loaded. Besides the activity estimations and the factor weights, the previous filtered out expressed gene names are loaded.
+
+```{r Load COSMOS input, message=FALSE, warning=FALSE, error=FALSE, results='hide'}
+# Load data
+
+signaling_input <- ligrec_TF_moon_inputs$TF
+ligrec_input <- ligrec_TF_moon_inputs$ligrec
+moon_input <- ligrec_TF_moon_inputs$moon
+
+RNA_input <- weights$RNA[,4] 
+prot_input <- weights$proteo[,4]
+metab_inputs <- weights$metab[,4]
+
+names(RNA_input) <- gsub("_RNA","",names(RNA_input))
+names(prot_input) <- gsub("_proteo","",names(prot_input))
+
+expressed_genes <- as.data.frame(read_csv("data/RNA/RNA_log2_FPKM_clean.csv"))$Genes #since only complete cases were considered in the first part, here the full gene list is loaded
+```
+
+Next, we perform filtering steps in order to identify top deregulated features. Here, the individual filtering is based on absolute factor weight or activity score. The first step involves the visualization of the respective distribution to define an appropriate threshold.
+
+First, the RNA factor weights are filtered based on a threshold defined by their distribution as well a threshold defined by the distribution of the protein factor weights.
+
+```{r Plot: RNA weights & protein weights}
+##RNA
+{plot(density(RNA_input))
+abline(v = -0.2)
+abline(v = 0.2)}
+
+{plot(density(prot_input))
+abline(v = -0.05)
+abline(v = 0.05)}
+```
+
+Based on the plots and indicated by the straight lines, the RNA weights threshold is set to -0.2 and 0.2, and the protein weights threshold to -0.05 and 0.05. RNA factor weight values lying inside this threshold are set to 0 and previously filtered out genes (before MOFA analysis) are also included with value 0.
+
+```{r Filtering RNA weights}
+for(gene in names(RNA_input)) {
+  if (RNA_input[gene] > -0.2 & RNA_input[gene] < 0.2)
+  {
+    RNA_input[gene] <- 0
+  } else
+  {
+    RNA_input[gene] <- sign(RNA_input[gene]) * 10
+  }
+  if (gene %in% names(prot_input))
+  {
+    if (prot_input[gene] > -0.05 & prot_input[gene] < 0.05)
+    {
+      RNA_input[gene] <- 0
+    } else
+    {
+      RNA_input[gene] <- sign(RNA_input[gene]) * 10
+    }
+  }
+}
+
+expressed_genes <- expressed_genes[!(expressed_genes %in% names(RNA_input))]
+genes <- expressed_genes
+expressed_genes <- rep(0,length(expressed_genes))
+names(expressed_genes) <- genes
+
+RNA_input <- c(RNA_input, expressed_genes)
+```
+
+The same procedure is repeated for the transcription factor activities.
+
+```{r Plot: TF activity estimates}
+## Transcription factors
+{plot(density(signaling_input))
+abline(v = -0.5)
+abline(v = 3.5)}
+```
+
+The threshold is set to -0.5 and 3.5 respectively. Further, the TF_to_remove variable is later used to remove transcription factors with activities below this threshold from the prior knowledge network.
+
+```{r Filtering TF activity estimates}
+TF_to_remove <- signaling_input[signaling_input > -0.5 & signaling_input < 3.5]
+signaling_input <- signaling_input[signaling_input < -0.5 | signaling_input > 3.5]
+```
+
+The same procedure is repeated for the ligand-receptor activities.
+
+```{r Plot: Ligand-receptor activity estimates}
+## Ligand-receptor interactions
+{plot(density(ligrec_input))
+abline(v = -0.5)
+abline(v = 2.5)}
+```
+
+Here, only activities higher than 2.5 or lower than -0.5 are kept (see straight lines in plot). Since at this point we are interested in the receptors, the names are adjusted accordingly and if there are multiple mentions of a receptor, its activity is calculated by the mean of the associated ligand-receptor interactions.
+
+```{r Filtering ligand-receptor activity estimates}
+ligrec_input <- ligrec_input[ligrec_input > 2.5 | ligrec_input < -0.5]
+
+rec_inputs <- ligrec_input
+names(rec_inputs) <- gsub(".+___","",names(rec_inputs))
+rec_inputs <- tapply(rec_inputs, names(rec_inputs), mean)
+receptors <- names(rec_inputs)
+rec_inputs <- as.numeric(rec_inputs)
+names(rec_inputs) <- receptors
+```
+
+The same procedure is repeated for the transcription factor master regulator activities.
+
+```{r Plot: mOOn activity estimates}
+## moon
+{plot(density(moon_input))
+abline(v = -0.5)
+abline(v = 1.5)}
+```
+
+Here, only activities higher than 1.5 or lower than -0.5 are kept (see straight lines in plot). Further, only unmentioned entities are kept to complement the receptors.
+
+```{r Filtering mOOn activity estimates}
+moon_input <- moon_input[moon_input > 1.5 | moon_input < -0.5]
+moon_input <- moon_input[!(names(moon_input) %in% names(rec_inputs))]
+```
+
+Finally, the same procedure is repeated for the metabolite factor weights.
+
+```{r Plot: Metabolite factor weights}
+## Metabolites
+{plot(density(metab_inputs))
+abline(v = -0.2)
+abline(v = 0.2)}
+```
+
+The threshold is set to 0.2 and -0.2 respectively. Further, the metab_to_exclude variable is later used to remove metabolites with activities below this threshold from the prior knowledge network. Moreover, metabolite names are translated into HMDB format and metabolic compartment codes (m = mitochondria, c = cytosol) as well as metab\_\_ prefix is added to HMDB IDs. More information regarding compartment codes can be found [here]{<http://bigg.ucsd.edu/compartments>}.
+
+```{r Filtering metabolite factor weights, message=FALSE, warning=FALSE, error=FALSE, results='hide'}
+metab_to_HMDB <- as.data.frame(
+  read_csv("data/metabolomic/MetaboliteToHMDB.csv"))
+metab_to_HMDB <- metab_to_HMDB[metab_to_HMDB$common %in% names(metab_inputs),]
+metab_inputs <- metab_inputs[metab_to_HMDB$common]
+names(metab_inputs) <- metab_to_HMDB$HMDB
+
+metab_inputs <- cosmosR::prepare_metab_inputs(metab_inputs, compartment_codes = c("m","c"))
+
+metab_to_exclude <- metab_inputs[abs(metab_inputs) < 0.2]
+metab_inputs <- metab_inputs[abs(metab_inputs) > 0.2]
+```
+
+Next, the prior knowledge network (PKN) is loaded. To see how the full meta PKN was assembled, see [PKN]{<https://github.com/saezlab/meta_PKN_BIGG.git>}. Since we are not interested in including transcription factors and metabolites that were previously filtered out, we also remove the respective nodes from the PKN. 
+
+```{r Meta network}
+## Load and filter meta network
+data("meta_network")
+
+meta_network <- meta_network[!(meta_network$source %in% names(TF_to_remove)) & !(meta_network$target %in% names(TF_to_remove)),]
+meta_network <- meta_network[!(meta_network$source %in% names(metab_to_exclude)) & !(meta_network$target %in% names(metab_to_exclude)),]
+```
+
+Then the datasets are merged, entries that are not included in the PKN are removed and the filtering steps are completed. The merging in this case is based on the idea of deriving the forward network via the receptor/moon to transcription factor/metabolite direction.
+
+```{r Merge datasets to input}
+upstream_inputs <- c(rec_inputs,moon_input)
+downstream_inputs <- c(metab_inputs, signaling_input)
+
+upstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(upstream_inputs, meta_network)
+downstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(downstream_inputs, meta_network)
+
+rec_to_TF_cosmos_input <- list(upstream_inputs_filtered, downstream_inputs_filtered)
+save(rec_to_TF_cosmos_input, file = "data/cosmos/rec_to_TF_cosmos_input.Rdata")
+```
+
+At this point, we can perform the COSMOS analysis. Firstly, the options for the CARNIVAL run such as the time limit and min gap tolerance are set and the user must provide a path to its CPLEX executable. You can check the CARNIVAL_options variable to see all possible options that can be adjusted.
+
+```{r Carnival options pre-run}
+## Set CARNIVAL options to solve pre-optimization problem
+my_options <- default_CARNIVAL_options(solver = "cplex")
+my_options$solverPath <- "/Applications/CPLEX_Studio221/cplex/bin/x86-64_osx/cplex"
+my_options$solver <- "cplex"
+my_options$mipGAP <- 0.05
+my_options$threads <- 2
+my_options$timelimit <- 360
+my_options$limitPop <- 1000
+```
+
+Here, we are trying to find the "forward" network causally connecting the signaling data to metabolic data by using Carnival's ILP solution and the PKN. To further simplify the prior knowledge network (and perform checks on the input data), the pre-processing function of COSMOS is used. Details about the options can be found in the documentation as well as in the [COSMOS tutorial]{<https://saezlab.github.io/cosmosR/articles/tutorial.html>}.
+
+```{r COSMOS pre-run forward network}
+pre_run_rec_to_TF <- preprocess_COSMOS_signaling_to_metabolism(meta_network = meta_network,
+                                                               signaling_data = upstream_inputs_filtered,
+                                                               metabolic_data = downstream_inputs_filtered,
+                                                               diff_expression_data = RNA_input,
+                                                               maximum_network_depth = 4,
+                                                               remove_unexpressed_nodes = T,
+                                                               filter_tf_gene_interaction_by_optimization = T,
+                                                               CARNIVAL_options = my_options)
+```
+
+In this part, we can set up the options for the optimization run. The running time should be much higher here than in pre-optimization. You can increase the number of threads to use if you have many available CPUs.
+
+```{r Carnival options run}
+## Set CARNIVAL options to solve optimization problem
+my_options$mipGAP <- 0.05
+my_options$threads <- 2
+my_options$timelimit <- 720
+my_options$limitPop <- 1000
+```
+
+After pre-optimization, we can perform the actual COSMOS run using the pre-optimized solution.
+
+```{r COSMOS run forward network, echo=FALSE}
+run_rec_to_TF <- run_COSMOS_signaling_to_metabolism(data = pre_run_rec_to_TF,
+                                                    CARNIVAL_options = my_options)
+
+save(run_rec_to_TF, file = "results/cosmos/run_rec_to_TF.Rdata")
+```
+
+In order to analyze the gained sub-network, we first process the COSMOS result by extracting the list of interactions (nodes, sign, weight) in the simple interaction format (SIF) and by extracting a list of accompanying attributes (ATT). Here, we can also remove nodes with average activity of 0 as well as with weight of 0.
+
+```{r Processing COSMOS output}
+## COSMOS output evaluation
+
+SIF_rec_to_TF <- as.data.frame(run_rec_to_TF$weightedSIF)
+SIF_rec_to_TF <- SIF_rec_to_TF[which(SIF_rec_to_TF$Weight != 0),]
+
+ATT_rec_to_TF <- as.data.frame(run_rec_to_TF$nodesAttributes)
+colnames(ATT_rec_to_TF)[1] <- "Nodes"
+ATT_rec_to_TF$measured <- ifelse(ATT_rec_to_TF$NodeType %in% c("M","T","S","P"),1,0)
+ATT_rec_to_TF$Activity <- ATT_rec_to_TF$AvgAct
+ATT_rec_to_TF <- ATT_rec_to_TF[ATT_rec_to_TF$AvgAct != 0,]
+
+res_mofa_rec_to_TF <- list(SIF_rec_to_TF,ATT_rec_to_TF)
+save(res_mofa_rec_to_TF, file = "results/cosmos/res_mofamoon_rec_to_TFmet.RData")
+write_csv(SIF_rec_to_TF, file = "results/cosmos/SIF_res_mofamoon_rec_to_TFmet.csv")
+write_csv(ATT_rec_to_TF, file = "results/cosmos/ATT_res_mofamoon_rec_to_TFmet.csv")
+```
+
+Since we are also interested to derive the forward network via the transcription factor/moon to ligand direction, this COSMOS analysis is additionally performed.
+
+We first assign the activities of the ligand-receptor interactions to the ligands and calculate the mean activity of the ligands in case of multiple entries. 
+
+```{r Filtering}
+lig_inputs <- ligrec_input
+names(lig_inputs) <- gsub("___.+","",names(lig_inputs))
+lig_inputs <- tapply(lig_inputs, names(lig_inputs), mean)
+ligands <- names(lig_inputs)
+lig_inputs <- as.numeric(lig_inputs)
+names(lig_inputs) <- ligands
+```
+
+Then the datasets are merged appropriately, entries that are not included in the PKN are removed and the filtering steps are completed. 
+
+```{r Combine inputs}
+upstream_inputs <- c(signaling_input, moon_input)
+downstream_inputs <- c(lig_inputs)
+
+upstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(upstream_inputs, meta_network)
+downstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(downstream_inputs, meta_network)
+
+TF_to_lig_cosmos_input <- list(upstream_inputs_filtered, downstream_inputs_filtered)
+save(TF_to_lig_cosmos_input, file = "data/cosmos/TF_to_lig_cosmos_input.Rdata")
+```
+
+```{r Carnival options pre-run}
+## Set CARNIVAL options to solve optimization problem
+my_options$mipGAP <- 0.05
+my_options$threads <- 2
+my_options$timelimit <- 360
+my_options$limitPop <- 1000
+```
+
+After setting the variables for the CPLEX solver, we can perform the pre-optimization run ...
+
+```{r COSMOS pre-run forward network}
+pre_run_TF_to_lig <- preprocess_COSMOS_signaling_to_metabolism(meta_network = meta_network, 
+                                                               signaling_data = upstream_inputs_filtered,
+                                                               metabolic_data = downstream_inputs_filtered,
+                                                               diff_expression_data = RNA_input,
+                                                               maximum_network_depth = 4,
+                                                               remove_unexpressed_nodes = T,
+                                                               filter_tf_gene_interaction_by_optimization = T,
+                                                               CARNIVAL_options = my_options)
+```
+
+... set the options for the actual run ...
+
+```{r Carnival options run}
+## Set CARNIVAL options to solve optimization problem
+my_options$mipGAP <- 0.05
+my_options$threads <- 4
+my_options$timelimit <- 720
+my_options$limitPop <- 1000
+```
+
+... and perform the optimization.
+
+```{r COSMOS run forward network}
+run_TF_to_lig <- run_COSMOS_signaling_to_metabolism(data = pre_run_TF_to_lig,
+                                                    CARNIVAL_options = my_options)
+
+save(run_TF_to_lig, file = "results/cosmos/run_TF_to_lig.Rdata")
+```
+
+Again, we extract the information from the determined network and filter out inactive nodes.
+
+```{r Processing COSMOS output}
+SIF_TF_to_lig <- as.data.frame(run_TF_to_lig$weightedSIF)
+SIF_TF_to_lig <- SIF_TF_to_lig[which(SIF_TF_to_lig$Weight != 0),]
+
+ATT_TF_to_lig <- as.data.frame(run_TF_to_lig$nodesAttributes)
+colnames(ATT_TF_to_lig)[1] <- "Nodes"
+ATT_TF_to_lig$measured <- ifelse(ATT_TF_to_lig$NodeType %in% c("M","T","S","P"),1,0)
+ATT_TF_to_lig$Activity <- ATT_TF_to_lig$AvgAct
+ATT_TF_to_lig <- ATT_TF_to_lig[ATT_TF_to_lig$AvgAct != 0,]
+
+res_mofa_TF_to_lig <- list(SIF_TF_to_lig,ATT_TF_to_lig)
+save(res_mofa_TF_to_lig, file = "results/cosmos/res_mofamoon_TF_to_lig.RData")
+write_csv(SIF_TF_to_lig, file = "results/cosmos/SIF_mofamoon_TF_to_lig.csv")
+write_csv(ATT_TF_to_lig, file = "results/cosmos/ATT_mofamoon_TF_to_lig.csv")
+```
+
+The next step connects both networks, resulting in a complete network of interactions between receptors, ligands, transcription factor regulators, transcription factors, and metabolites. 
+
+After merging both inferred networks ATT file, we can identify whether the activity of the node is positive or negative and save the result under the variable sign_activity. Here, to avoid multiple mentions of one specific node, we can combine multiple mentions by calculating the mean. 
+
+```{r Combine ATTs}
+combined_ATT <- as.data.frame(rbind(ATT_rec_to_TF, ATT_TF_to_lig))
+combined_ATT$sign_activity <- sign(combined_ATT$AvgAct)
+
+combined_ATT$NodeType <- ifelse(combined_ATT$NodeType == "", 0, 1) #if NodeType is available, set to 1, else set to 0
+combined_ATT <- as.data.frame(combined_ATT %>% 
+  group_by(Nodes) %>%
+  summarise(across(.fns= ~ mean(.x, na.rm = TRUE))))
+```
+
+Further, we can also add the MOFA weight and activity score information to the list of attributes.
+
+```{r Add activities and weights to network}
+## TF
+TF_weights <- ligrec_TF_moon_inputs$TF
+names(TF_weights) <- gsub("_TF","",names(TF_weights))
+TF_weights <- data.frame(Nodes = names(TF_weights), mofa_weights = TF_weights)
+
+## Ligands
+lig_weights <- ligrec_TF_moon_inputs$ligrec
+names(lig_weights) <- gsub("___.+","",names(lig_weights))
+lig_weights <- tapply(lig_weights, names(lig_weights), mean)
+ligands <- names(lig_weights)
+lig_weights <- as.numeric(lig_weights)
+names(lig_weights) <- ligands
+lig_weights <- data.frame(Nodes = names(lig_weights), mofa_weights = lig_weights)
+
+## Receptors
+rec_weights <- ligrec_TF_moon_inputs$ligrec
+names(rec_weights) <- gsub(".+___","",names(rec_weights))
+rec_weights <- tapply(rec_weights, names(rec_weights), mean)
+receptors <- names(rec_weights)
+rec_weights <- as.numeric(rec_weights)
+names(rec_weights) <- receptors
+rec_weights <- data.frame(Nodes = names(rec_weights), mofa_weights = rec_weights)
+
+## Metabolites
+metab_weights <- data.frame(Nodes = names(metab_inputs), mofa_weights = metab_inputs)
+
+## Combine
+feature_weights <- as.data.frame(rbind(TF_weights, rec_weights, lig_weights, metab_weights))
+
+## Add weights to data
+combined_ATT <- merge(combined_ATT, feature_weights, all.x = T)
+```
+
+To identify whether a node is a ligand or a receptor, we first load the consensus PKN from LIANA and only keep entries which represent an interaction in our network.
+
+```{r Load consensus LIANA}
+ligrec_ressource <- distinct(liana::decomplexify(liana::select_resource("Consensus")[[1]]))
+ligrec_df <- ligrec_ressource[,c("source_genesymbol","target_genesymbol")]
+ligrec_df <- distinct(ligrec_df)
+names(ligrec_df) <- c("Node1","Node2")
+
+ligrec_df$Node1 <- gsub("-","_",ligrec_df$Node1)
+ligrec_df$Node2 <- gsub("-","_",ligrec_df$Node2)
+ligrec_df$Sign <- 1
+ligrec_df$Weight <- 1
+
+ligrec_df <- ligrec_df[ligrec_df$Node1 %in% combined_ATT$Nodes & ligrec_df$Node2 %in% combined_ATT$Nodes, ]
+```
+
+Then, we add the information to the network (ligand = 2, receptor = 3, other = 1, no NodeType available = 0).
+
+```{r Set NodeType}
+combined_ATT$NodeType <- ifelse(combined_ATT$Nodes %in% ligrec_df$Node1, 2, ifelse(combined_ATT$Nodes %in% ligrec_df$Node2, 3, combined_ATT$NodeType)) #if node is a ligand set NodeType to 2, if node is a receptor set NodeType to 3, else keep 0 or 1
+
+write_csv(combined_ATT, file = "results/cosmos/ATT_mofamoon_combined.csv")
+```
+
+Finally, we merge both SIF together by summarizing multiple entries via mean calculation and add found interactions from the filtered LIANA consensus PKN.
+
+```{r Combine SIFs}
+combined_SIF <- as.data.frame(rbind(SIF_rec_to_TF, SIF_TF_to_lig))
+combined_SIF <- as.data.frame(combined_SIF %>%
+  group_by(Node1, Node2) %>%
+  summarise(across(.fns= ~ mean(.x, na.rm = TRUE))))
+
+combined_SIF <- as.data.frame(rbind(combined_SIF,ligrec_df))
+
+res_mofa_combined <- list(combined_SIF, combined_ATT)
+save(res_mofa_combined, file = "results/cosmos/res_mofamoon_combined.RData")
+write_csv(combined_SIF, file = "results/cosmos/SIF_mofamoon_combined.csv")
+```
+
+To filter the final network based on node properties, the strategy shown here can be used to find interesting ligand-receptor interactions. The final result is saved and later inspected ("Network visualization").
+
+```{r Filter network}
+ligands <- combined_ATT[combined_ATT$NodeType == 2,"Nodes"] # 2 for ligand
+receptors <- combined_ATT[combined_ATT$NodeType == 3,"Nodes"] # 3 for receptors
+
+combined_SIF_reduced <- combined_SIF[!(combined_SIF$Node2 %in% receptors & !(combined_SIF$Node2 %in% combined_SIF$Node1)),] #no node that is a receptor but not a source
+combined_SIF_reduced <- combined_SIF_reduced[!(combined_SIF_reduced$Node2 %in% ligands & !(combined_SIF_reduced$Node2 %in% combined_SIF_reduced$Node1)),] #no node that is a ligand but not a source
+combined_SIF_reduced <- combined_SIF_reduced[!(combined_SIF_reduced$Node1 %in% receptors & !(combined_SIF_reduced$Node1 %in% combined_SIF_reduced$Node2)),] #no node that is a receptor but not a regulated target
+combined_SIF_reduced <- combined_SIF_reduced[!(combined_SIF_reduced$Node1 %in% ligands & !(combined_SIF_reduced$Node1 %in% combined_SIF_reduced$Node2)),] #no node that is a ligand but not a regulated target 
+
+combined_ATT_reduced <- combined_ATT[combined_ATT$Nodes %in% combined_SIF_reduced$Node1 | combined_ATT$Nodes %in% combined_SIF_reduced$Node2,]
+
+res_mofa_combined_reduced <- list(combined_SIF_reduced, combined_ATT_reduced)
+save(res_mofa_combined_reduced, file = "results/cosmos/res_mofamoon_combined_reduced.RData")
+write_csv(combined_SIF_reduced, file = "results/cosmos/SIF_mofamoon_combined_reduced.csv")
+write_csv(combined_ATT_reduced, file = "results/cosmos/ATT_mofamoon_combined_reduced.csv")
+```
+
+Also the specific sub-network of a gene (e.g. MYC) can be extracted by taking into account n-step-distant nodes (here: 4 steps).
+
+```{r}
+sig_prots <- combined_SIF_reduced[,c(1,4,2,3)]
+names(sig_prots) <- c("source","interaction","target","sign")
+background <- unique(c(sig_prots$source,sig_prots$target))
+
+subnetwork_per_gene <- list()
+
+for(node in background){
+  
+  SIF <- cosmosR:::keep_controllable_neighbours(sig_prots, n_steps = 4, input_nodes = node) #keeps the nodes in network that are no more then n_steps away from the starting nodes
+  ATT <- combined_ATT_reduced[combined_ATT_reduced$Nodes %in% SIF$source | combined_ATT_reduced$Nodes %in% SIF$target,] #keep supplementing information for nodes
+  
+  write_csv(ATT, file = paste0("results/cosmos/subnetwork/ATT_subnetwork_",node,".csv"))
+  write_csv(SIF, file = paste0("results/cosmos/subnetwork/SIF_subnetwork_",node,".csv"))
+  
+  subnetwork_per_gene[[node]] <- list("SIF" = SIF, "ATT" = ATT)
+}
+```
+
+### Pathway enrichment analysis
+
+A possible downstream analysis in R is an over-representation analysis (ORA) to determine whether genes from specific pathways (e.g. KEGG pathways) are present more than expected in our network.
+
+For that we need the following inputs: a matrix to evaluate (*mat*) and a feature set (*pathways*). To create the feature set, the pathway list from the Kyoto Encyclopedia of Genes and Genomes (KEGG) database, the pathway list from the Gene Ontology Biological Processes (GOBP) database and the pathway list from ECM-related mechanisms (NABA) are loaded. Further, to set up the evaluation matrix, the PKN from COSMOS is loaded, PKN nodes that are not present in the pathways removed and metabolic interactions discarded. Then, by associating all nodes from the PKN/KEGG/GOBP/NABA pathways present in the inferred biological network with value 1 and all nodes not present with value 0, we can create the matrix. 
+
+```{r import_gmt function, include=FALSE}
+import_gmt <- function(gmtfile, fast = T){
+  if(fast)
+  {
+    genesets = GSEABase::getGmt(con = gmtfile)
+    genesets = unlist(genesets)
+    
+    gene_to_term =plyr::ldply(genesets,function(geneset){
+      temp <- geneIds(geneset)
+      temp2 <- setName(geneset)
+      temp3 <- as.data.frame(cbind(temp,rep(temp2,length(temp))))
+      
+    },.progress = plyr::progress_text())
+    names(gene_to_term) <- c("gene","term")
+    return(gene_to_term[complete.cases(gene_to_term),])
+  }
+  else
+  {
+    genesets = getGmt(con = gmtfile)
+    genesets = unlist(genesets)
+    
+    gene_to_term <- data.frame(NA,NA)
+    names(gene_to_term) <- c("gene","term")
+    for (geneset in genesets)
+    {
+      temp <- geneIds(geneset)
+      temp2 <- setName(geneset)
+      temp3 <- as.data.frame(cbind(temp,rep(temp2,length(temp))))
+      names(temp3) <- c("gene","term")
+      gene_to_term <- rbind(gene_to_term,temp3)
+    }
+    
+    return(gene_to_term[complete.cases(gene_to_term),])
+  }
+}
+```
+
+```{r}
+## Feature set
+pathways_df <- data.frame(rbind(import_gmt("support/c2.cp.v7.2.symbols.gmt"), import_gmt("support/c5.go.bp.v2022.1.Hs.symbols.gmt")))
+pathways_NABA_KEGG_GOBP <- data.frame(pathways_df[grepl("NABA_",pathways_df$term) |  grepl("KEGG_",pathways_df$term) | grepl("GOBP_", pathways_df$term),])
+pathways_NABA_KEGG_GOBP$mor <- 1
+
+## Matrix
+data("meta_network")
+prots <- unique(c(meta_network$source, meta_network$target))
+prots <- gsub("Gene[0-9]+__","",prots)
+prots <- gsub("_reverse","",prots)
+prots <- prots[!grepl("Metab",prots)]
+prots <- prots[prots %in% pathways_NABA_KEGG_GOBP$gene]
+
+sig_prots <- combined_ATT_reduced$Nodes
+sig_prots <- gsub("Gene[0-9]+__","",sig_prots)
+sig_prots <- gsub("_reverse","",sig_prots)
+sig_prots <- sig_prots[!grepl("Metab",sig_prots)]
+sig_prots <- unique(sig_prots)
+
+mat <- matrix(0,nrow = length(prots),1)
+row.names(mat) <- prots
+mat[row.names(mat) %in% sig_prots, 1] <-  1
+mat <- mat[order(mat[,1],decreasing = T), ,drop = F]
+
+## ORA analysis
+pathway_ORA_NABA_KEGG_GOBP_all <- as.data.frame(decoupleR::run_ora(mat = mat, 
+                                                     network = pathways_NABA_KEGG_GOBP, 
+                                                     .source = term, 
+                                                     .target = gene,
+                                                     n_up = length(sig_prots), 
+                                                     n_background = length(prots), 
+                                                     minsize = 0))
+
+```
+
+After the ORA has been performed, the result is returned as a data frame specifying enriched pathways with a p value and a corresponding score $(-log_{10}(p)$). We can visualize the results with a ggplot showing the highest scoring pathways.
+
+```{r}
+pathway_ORA_NABA_KEGG_GOBP_all <- pathway_ORA_NABA_KEGG_GOBP_all[order(pathway_ORA_NABA_KEGG_GOBP_all$score, decreasing = T),]
+
+head(pathway_ORA_NABA_KEGG_GOBP_all, n = 25)
+
+ggplot(pathway_ORA_NABA_KEGG_GOBP_all[pathway_ORA_NABA_KEGG_GOBP_all$score > 30,]) +
+  geom_point(aes(score, reorder(source, score, increasing = T), color = -log10(p_value)))
+
+ggplot(pathway_ORA_NABA_KEGG_GOBP_all[grepl("NABA", pathway_ORA_NABA_KEGG_GOBP_all$source),]) +
+  geom_point(aes(score, reorder(source, score, increasing = T), color = -log10(p_value)))
+
+ggplot(pathway_ORA_NABA_KEGG_GOBP_all[grepl("GOBP", pathway_ORA_NABA_KEGG_GOBP_all$source) & pathway_ORA_NABA_KEGG_GOBP_all$score > 30,]) +
+  geom_point(aes(score, reorder(source, score, increasing = T), color = -log10(p_value)))
+
+ggplot(pathway_ORA_NABA_KEGG_GOBP_all[grepl("KEGG", pathway_ORA_NABA_KEGG_GOBP_all$source) & pathway_ORA_NABA_KEGG_GOBP_all$score > 15,]) +
+  geom_point(aes(score, reorder(source, score, increasing = T), color = -log10(p_value)))
+```
+Here, for instance, we can see that proteins from pathways in cancer (KEGG) are enriched - in accordance with the fact that we are considering cancer cell lines.
+
+We can further identify and highlight the overlap between nodes present in our network and proteins from the (top) significantly enriched KEGG/NABA/GOBP pathways.
+
+```{r}
+sig_pathways <- pathway_ORA_NABA_KEGG_GOBP_all[pathway_ORA_NABA_KEGG_GOBP_all$score > 0,"source"]
+
+pathways_adjacency <- dcast(pathways_NABA_KEGG_GOBP, gene~term)
+pathways_adjacency <- pathways_adjacency[pathways_adjacency$gene %in% sig_prots,]
+row.names(pathways_adjacency) <- pathways_adjacency$gene
+pathways_adjacency <- pathways_adjacency[,sig_pathways]
+pathways_adjacency[is.na(pathways_adjacency)] <- 0
+
+pheatmap(t(pathways_adjacency), border_color = T, cluster_rows = F, color = c("lightyellow","red"), breaks = c(0,0.5,1), fontsize = 8, show_rownames = F)
+
+sig_pathways <- pathway_ORA_NABA_KEGG_GOBP_all[pathway_ORA_NABA_KEGG_GOBP_all$score > 30,"source"]
+
+pathways_adjacency <- pathways_adjacency[,sig_pathways]
+
+pheatmap(t(pathways_adjacency), border_color = T, cluster_rows = F, color = c("lightyellow","red"), breaks = c(0,0.5,1), fontsize = 7)
+```
+
+In addition, we can perform an analysis that performs ORA independently for all nodes using the starting node and n-step-distant nodes (in this case 2 steps), enabling us to specifically inspect individual nodes (e.g. SRC) or pathways (e.g. KEGG pathways in cancer). 
+
+```{r eval=FALSE, include=TRUE}
+## Matrix
+data("meta_network")
+prots <- unique(c(meta_network$source, meta_network$target))
+prots <- gsub("Gene[0-9]+__","",prots)
+prots <- gsub("_reverse","",prots)
+prots <- prots[prots %in% pathways_NABA_KEGG_GOBP$gene]
+
+sig_prots <- combined_SIF_reduced[,c(1,4,2)]
+names(sig_prots) <- c("source","interaction","target")
+background <- unique(c(sig_prots$source,sig_prots$target))
+background_ORA <-  gsub("Gene[0-9]+__","", background)
+background_ORA <-  gsub("_reverse","", background_ORA)
+background_ORA <- unique(background_ORA)
+
+pathway_ORA_NABA_KEGG_GOBP_list <- list()
+
+for(node in background){
+
+  nodes <- cosmosR:::keep_controllable_neighbours(sig_prots, n_steps = 2, input_nodes = node) #keeps the nodes in network that are no more then n_steps away from the starting nodes
+  nodes <- unique(c(nodes$source,nodes$target))
+  nodes <- gsub("Gene[0-9]+__","",nodes)
+  nodes <- gsub("_reverse","",nodes)
+  nodes <- nodes[nodes %in% pathways_NABA_KEGG_GOBP$gene]
+  
+  if (length(nodes) > 0) {
+    mat <- matrix(0,nrow = length(background_ORA),1)
+    row.names(mat) <- background_ORA
+    mat[row.names(mat) %in% nodes, 1] <-  1
+    mat <- mat[order(mat[,1],decreasing = T), ,drop = F]
+    
+    pathways_NABA_KEGG_GOBP_filtered <- pathways_NABA_KEGG_GOBP %>%
+      group_by(term) %>%
+      filter(n_distinct(pathways_NABA_KEGG_GOBP[gene %in% nodes,])>0) %>%
+      as.data.frame()
+    
+    pathway_ORA_NABA_KEGG_GOBP <- as.data.frame(decoupleR::run_ora(mat = mat,
+                                                              network = pathways_NABA_KEGG_GOBP_filtered,
+                                                              .source = term,
+                                                              .target = gene,
+                                                              n_up = length(nodes),
+                                                              n_background = length(prots),
+                                                              minsize = 0))
+    pathway_ORA_NABA_KEGG_GOBP <- pathway_ORA_NABA_KEGG_GOBP[,c(4,2)]
+    names(pathway_ORA_NABA_KEGG_GOBP) <- c(node,"pathway")
+    pathway_ORA_NABA_KEGG_GOBP_list[[node]] <- pathway_ORA_NABA_KEGG_GOBP
+    
+  } else {
+
+    pathway_ORA_NABA_KEGG_GOBP <-  data.frame(rep(0, length(unique(pathways_NABA_KEGG_GOBP[pathways_NABA_KEGG_GOBP$gene %in% background==T,2]))), 
+                                                     unique(pathways_NABA_KEGG_GOBP[pathways_NABA_KEGG_GOBP$gene %in% background==T,2]))
+    names(pathway_ORA_NABA_KEGG_GOBP) <- c(node,"pathway")
+    pathway_ORA_NABA_KEGG_GOBP_list[[node]] <- pathway_ORA_NABA_KEGG_GOBP
+  
+    }
+}
+save(pathway_ORA_NABA_KEGG_GOBP_list, file = "results/pathway_enrichment/pathway_ORA_NABA_KEGG_GOBP_list.RData")
+```
+
+```{r}
+load("results/pathway_enrichment/pathway_ORA_NABA_KEGG_GOBP_list.RData")
+pathway_ORA_NABA_KEGG_GOBP_combined <- data.frame(Reduce(function(x,y) merge(x,y,all.x = T, all.y = T), pathway_ORA_NABA_KEGG_GOBP_list))
+row.names(pathway_ORA_NABA_KEGG_GOBP_combined) <- pathway_ORA_NABA_KEGG_GOBP_combined$pathway
+pathway_ORA_NABA_KEGG_GOBP_combined <- pathway_ORA_NABA_KEGG_GOBP_combined[,-1]
+pathway_ORA_NABA_KEGG_GOBP_combined[is.na(pathway_ORA_NABA_KEGG_GOBP_combined)] <- 0
+
+pheatmap(pathway_ORA_NABA_KEGG_GOBP_combined, fontsize = 6, cluster_rows = T, show_rownames = F)
+```
+
+Since cancer cell lines are considered here, we can specifically look at known over-activated cancer pathways.
+
+```{r}
+cancer_control <- pathway_ORA_NABA_KEGG_GOBP_combined["KEGG_PATHWAYS_IN_CANCER",]
+cancer_control <- t(cancer_control[,order(cancer_control[1,], decreasing = F)])
+ggplot(cancer_control)+geom_point(aes(reorder(rownames(cancer_control), KEGG_PATHWAYS_IN_CANCER, increasing = T), KEGG_PATHWAYS_IN_CANCER))+ theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+Also specific nodes (e.g. SRC) can be inspected to visualize certain pathway involvement.
+
+```{r}
+SRC_pathway <- pathway_ORA_NABA_KEGG_GOBP_list[["SRC"]][order(pathway_ORA_NABA_KEGG_GOBP_list[["SRC"]]$SRC, decreasing = T),][pathway_ORA_NABA_KEGG_GOBP_list[["SRC"]][order(pathway_ORA_NABA_KEGG_GOBP_list[["SRC"]]$SRC, decreasing = T),]$SRC,]
+ggplot(SRC_pathway)+geom_point(aes(reorder(pathway, SRC, increasing = T), SRC))+ theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+To compare the ORA result of the final network, we can also perform principal component gene set analysis ([PCGSA]{<https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4543476/}>) on the MOFA factors containing the protein weights as well as the RNA weights. The result can then be inspected as previously. Further information can be found here: [MOFA2 GSEA]{<https://raw.githack.com/bioFAM/MOFA2_tutorials/master/R_tutorials/GSEA.html>} 
+
+```{r}
+pathways_factor <- pathways_NABA_KEGG_GOBP %>%
+    group_by(term) %>%
+    pivot_wider(
+        names_from = gene,
+        values_from = mor) %>%
+  as.data.frame()
+rownames(pathways_factor) <- pathways_factor$term
+pathways_factor <- pathways_factor[,-1]
+pathways_factor[is.na(pathways_factor)] <- 0
+
+# Proteomics
+model_PCGSA <- model
+
+features_names(model_PCGSA)$proteo <- gsub("_proteo","",features_names(model_PCGSA)$proteo)
+
+factor_GSEA_prot <- MOFA2::run_enrichment(model_PCGSA, "proteo", as.matrix(pathways_factor), min.size = 0, factors = "all", sign = "positive", p.adj.method = "fdr") #here as an example positive weights: features with positive weights are “high” in the samples with positive factor values
+
+factor_GSEA_prot$pval.adj[is.na(factor_GSEA_prot$pval.adj)] <- 1
+factor_GSEA_prot$set.statistics[is.na(factor_GSEA_prot$set.statistics)] <- 0
+
+plot_enrichment_heatmap(factor_GSEA_prot)
+grid.arrange(plot_enrichment(factor_GSEA_prot, factor=1) + ggtitle("Factor1"),
+             plot_enrichment(factor_GSEA_prot, factor=2) + ggtitle("Factor2"),
+             plot_enrichment(factor_GSEA_prot, factor=3) + ggtitle("Factor3"),
+             plot_enrichment(factor_GSEA_prot, factor=4) + ggtitle("Factor4"),
+             plot_enrichment(factor_GSEA_prot, factor=5) + ggtitle("Factor5"))
+grid.arrange(plot_enrichment(factor_GSEA_prot, factor=6) + ggtitle("Factor6"),
+             plot_enrichment(factor_GSEA_prot, factor=7) + ggtitle("Factor7"),
+             plot_enrichment(factor_GSEA_prot, factor=8) + ggtitle("Factor8"),
+             plot_enrichment(factor_GSEA_prot, factor=9) + ggtitle("Factor9"))
+plot_enrichment_detailed(factor_GSEA_prot, factor = 4, max.genes = 10)
+
+factor_GSEA_prot_df <- data.frame(rownames(factor_GSEA_prot[["set.statistics"]]), factor_GSEA_prot[["set.statistics"]][,4], factor_GSEA_prot$pval.adj[,4])
+colnames(factor_GSEA_prot_df) <- c("source", "score", "p_value")
+
+ggplot(factor_GSEA_prot_df[factor_GSEA_prot_df$score > 4,]) +
+  geom_point(aes(score, reorder(source, score, increasing = T), color = p_value))
+
+#Transcriptomics
+features_names(model_PCGSA)$RNA <- gsub("_RNA","",features_names(model_PCGSA)$RNA)
+
+factor_GSEA_RNA <- MOFA2::run_enrichment(model_PCGSA, "RNA", as.matrix(pathways_factor), min.size = 0, factors = "all", sign = "positive", p.adj.method = "fdr")
+
+factor_GSEA_RNA$pval.adj[is.na(factor_GSEA_RNA$pval.adj)] <- 1
+factor_GSEA_RNA$set.statistics[is.na(factor_GSEA_RNA$set.statistics)] <- 0
+
+plot_enrichment_heatmap(factor_GSEA_RNA)
+grid.arrange(plot_enrichment(factor_GSEA_RNA, factor=1) + ggtitle("Factor1"),
+             plot_enrichment(factor_GSEA_RNA, factor=2) + ggtitle("Factor2"),
+             plot_enrichment(factor_GSEA_RNA, factor=3) + ggtitle("Factor3"),
+             plot_enrichment(factor_GSEA_RNA, factor=4) + ggtitle("Factor4"),
+             plot_enrichment(factor_GSEA_RNA, factor=5) + ggtitle("Factor5"))
+grid.arrange(plot_enrichment(factor_GSEA_RNA, factor=6) + ggtitle("Factor6"),
+             plot_enrichment(factor_GSEA_RNA, factor=7) + ggtitle("Factor7"),
+             plot_enrichment(factor_GSEA_RNA, factor=8) + ggtitle("Factor8"),
+             plot_enrichment(factor_GSEA_RNA, factor=9) + ggtitle("Factor9"))
+plot_enrichment_detailed(factor_GSEA_RNA, factor = 4)
+
+factor_GSEA_RNA_df <- data.frame(rownames(factor_GSEA_RNA[["set.statistics"]]), factor_GSEA_RNA[["set.statistics"]][,4], factor_GSEA_RNA$pval.adj[,4])
+colnames(factor_GSEA_RNA_df) <- c("source", "score", "p_value")
+
+ggplot(factor_GSEA_RNA_df[factor_GSEA_RNA_df$score > 7.5,]) +
+  geom_point(aes(score, reorder(source, score, increasing = T), color = p_value))
+```
+
+Interestingly, it becomes evident in the protein view that although Factor 4 explains not the most of the variance in the proteomics data, it explains the variance of the proteins in the ECM-related pathways (NABA pathways) important for cell reorganization in cancer. 
+Moreover, since RNA transcripts are intermediates to proteins, transcriptomics data can potentially lead to identify over-activated pathways.
+
+Further downstream analyses of the network model (e.g. using [CytoScape]{https://genome.cshlp.org/content/13/11/2498}) and the MOFA model (e.g. further comparisons before and after COSMOS) can be performed. In order to perform more targeted analyses related to GSA/GSEA and thus reduce the complexity, it is recommended to identify and extract pathways of interest prior to ORA/PCGSA.
+
+### Network visualization via CytoScape
+
+Here, short reproducible analyses of both the full network as well as a "MYC" sub-network are shown using [CytoScape's R implementation: RCy3]{https://bioconductor.org/packages/release/bioc/html/RCy3.html}. For further installation and set-up please refer to the [bioconductor]{https://bioconductor.org/packages/release/bioc/html/RCy3.html} page. Before running this code, we have to start a CytoScape session. Further, for better visualization, we first install the [yFiles Layout Algorithms app]{https://www.yworks.com/products/yfiles-layout-algorithms-for-cytoscape}. However, since yFiles do not support CytoScape automation (RCy3), we have to manually reshape the network using $\textit{Layout > yFiles Hierarchic Layout}$ inside CytoScape.
+
+```{r}
+installation_responses <- c()
+
+#list of app to install
+cyto_app_toinstall <- c("yFiles Layout Algorithms")
+
+cytoscape_version <- unlist(strsplit( cytoscapeVersionInfo()['cytoscapeVersion'],split = "\\."))
+if(length(cytoscape_version) == 3 && as.numeric(cytoscape_version[1]>=3) 
+   && as.numeric(cytoscape_version[2]>=7)){
+  for(i in 1:length(cyto_app_toinstall)){
+    #check to see if the app is installed.  Only install it if it hasn't been installed
+    if(!grep(commandsGET(paste("apps status app=\"", cyto_app_toinstall[1],"\"", sep="")), 
+             pattern = "status: Installed")){
+      installation_response <-commandsGET(paste("apps install app=\"", 
+                                                cyto_app_toinstall[i],"\"", sep=""))
+      installation_responses <- c(installation_responses,installation_response)
+    } else{
+      installation_responses <- c(installation_responses,"already installed")
+    }
+  }
+  installation_summary <- data.frame(name = cyto_app_toinstall, 
+                                     status = installation_responses)
+  
+  knitr::kable(list(installation_summary),
+  booktabs = TRUE, caption = 'A Summary of automated app installation'
+)
+}
+```
+
+
+First, we can display the full network.
+
+```{r}
+nodes <- data.frame(id = combined_ATT_reduced$Nodes, NodeType = as.integer(combined_ATT_reduced$NodeType), mofa_weights = as.numeric(combined_ATT_reduced$mofa_weights), Activity = combined_ATT_reduced$Activity, stringsAsFactors = F)
+
+nodes$mofa_weights[is.na(nodes$mofa_weights)] <- 0
+
+edges <- data.frame(source=combined_SIF_reduced$Node1, target = combined_SIF_reduced$Node2, sign = combined_SIF_reduced$Sign, weight = combined_SIF_reduced$Weight,stringsAsFactors = F)
+
+createNetworkFromDataFrames(nodes,edges,title = "Full COSMOS network", table.key.column = "name")
+```
+
+Here, the sub-network of neighbours within 4-steps-distance of MYC is visualized.
+
+```{r}
+gene <- "MYC"
+
+nodes <- data.frame(id = subnetwork_per_gene[[gene]]$ATT$Nodes, NodeType = as.integer(subnetwork_per_gene[[gene]]$ATT$NodeType), mofa_weights = as.numeric(subnetwork_per_gene[[gene]]$ATT$mofa_weights), Activity = subnetwork_per_gene[[gene]]$ATT$Activity, stringsAsFactors = F)
+
+nodes$mofa_weights[is.na(nodes$mofa_weights)] <- 0
+
+edges <- data.frame(source=subnetwork_per_gene[[gene]]$SIF$source, target = subnetwork_per_gene[[gene]]$SIF$target, sign = subnetwork_per_gene[[gene]]$SIF$sign, weight = subnetwork_per_gene[[gene]]$SIF$interaction,stringsAsFactors = F)
+
+createNetworkFromDataFrames(nodes,edges,title = paste("Sub-network",gene), table.key.column = "name")
+```
+
+Finally, we can save the CytoScape session and export static images of the networks as e.g. PDF files.
+
+```{r}
+exportImage(filename = "results/cytoscape/full_network.pdf", type = "PDF", resolution = 300, network = "Full COSMOS network")
+exportImage(filename = paste0("results/cytoscape/subnetwork_",gene,"analysis.pdf"), type = "PDF", resolution = 300, network = paste("Sub-network",gene))
+saveSession(filename = "results/cytoscape/cosmos_network_analysis.cys")
+```
+### Session info
+
+```{r}
+sessionInfo()
+```

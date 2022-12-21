@@ -1,0 +1,10 @@
+source,interaction,target,sign
+CTCF,1,MYC,-1
+GPC6,1,WNT5A,-1
+JUN,1,MYC,-1
+NLK,1,SMAD4,-1
+NLK,1,TCF4,-1
+SMAD4,1,CTCF,1
+SMAD4,1,JUN,1
+SMAD4,1,MYC,-1
+WNT5A,1,NLK,1

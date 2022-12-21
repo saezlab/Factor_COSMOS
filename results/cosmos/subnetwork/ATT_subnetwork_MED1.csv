@@ -1,0 +1,3 @@
+Nodes,NodeType,ZeroAct,UpAct,DownAct,AvgAct,measured,Activity,sign_activity,mofa_weights
+GATA6,1,0,1,0,1,1,1,1,4.726320506585749
+MED1,0,0,1,0,1,0,1,1,NA

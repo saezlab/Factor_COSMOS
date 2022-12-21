@@ -1,0 +1,3 @@
+Nodes,NodeType,ZeroAct,UpAct,DownAct,AvgAct,measured,Activity,sign_activity,mofa_weights
+NOTCH2,3,0,1,0,1,1,1,1,2.160784246933112
+RBPJ,1,0,1,0,1,1,1,1,3.9698492961016347

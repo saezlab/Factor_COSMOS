@@ -1,0 +1,3 @@
+Nodes,NodeType,ZeroAct,UpAct,DownAct,AvgAct,measured,Activity,sign_activity,mofa_weights
+FOSL1,1,0,1,0,1,1,1,1,5.904096979570688
+FOSL2,1,0,1,0,1,1,1,1,8.528610779063825
