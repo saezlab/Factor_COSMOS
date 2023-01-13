@@ -1,3 +1,6 @@
+library(readxl)
+library(readr)
+
 # Load metadata and reformat for consistency
 RNA_metadata <- as.data.frame(read_xls("data/metadata/NCI60_CELL_LINE_METADATA.xls", skip = 7, n_max = 61))
 RNA_metadata[,1] <- gsub(".*[:]","",RNA_metadata[,1])
