@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ### Installation and dependency
 
-COSMOS is dependent on CARNIVAL for exhibiting the signalling pathway optimization. CARNIVAL requires the interactive version of IBM Cplex or CBC-COIN solver as the network optimizer. The IBM ILOG Cplex is freely available through Academic Initiative [here]{<https://community.ibm.com/community/user/datascience/blogs/xavier-nodet1/2020/07/09/cplex-free-for-students>}. As an alternative, the CBC solver is open source and freely available for any user, but has a significantly lower performance than CPLEX. The CBC executable can be find under cbc/. Alternatively for small networks, users can rely on the freely available lpSolve R-package, which is automatically installed with the package.
+COSMOS is dependent on CARNIVAL for exhibiting the signalling pathway optimization. CARNIVAL requires the interactive version of IBM Cplex or CBC-COIN solver as the network optimizer. The IBM ILOG Cplex is freely available through Academic Initiative [here](https://community.ibm.com/community/user/datascience/blogs/xavier-nodet1/2020/07/09/cplex-free-for-students). As an alternative, the CBC solver is open source and freely available for any user, but has a significantly lower performance than CPLEX. The CBC executable can be find under cbc/. Alternatively for small networks, users can rely on the freely available lpSolve R-package, which is automatically installed with the package.
 
 In this tutorial we use *CPLEX* which is strongly recommended.
 
@@ -27,7 +27,7 @@ if (!requireNamespace("devtools", quietly = TRUE)) install.packages("devtools")
 if (!requireNamespace("cosmosR", quietly = TRUE)) devtools::install_github("saezlab/cosmosR")
 ```
 
-We are using MOFA2 (Argelaguet et al., 2018) to find correlation between different omics and use its output (factors) to restrict COSMOS input. However, since we are using the python version of MOFA2, please make sure to have [mofapy2]{<https://github.com/bioFAM/mofapy2>} as well as panda and numpy installed in your (conda) environment (e.g. by using reticulate: reticulate::use_condaenv("base", required = T) %\>% reticulate::conda_install(c("mofapy2","panda","numpy")). For downstream analysis, the R version of MOFA2 is used.
+We are using MOFA2 (Argelaguet et al., 2018) to find correlation between different omics and use its output (factors) to restrict COSMOS input. However, since we are using the python version of MOFA2, please make sure to have [mofapy2](https://github.com/bioFAM/mofapy2) as well as panda and numpy installed in your (conda) environment (e.g. by using reticulate: reticulate::use_condaenv("base", required = T) %\>% reticulate::conda_install(c("mofapy2","panda","numpy")). For downstream analysis, the R version of MOFA2 is used.
 
 ```{r MOFA2 installation, message=FALSE}
 # Install MOFA2 from bioconductor (stable version)
@@ -35,7 +35,7 @@ if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocMana
 if (!requireNamespace("MOFA2", quietly = TRUE)) BiocManager::install("MOFA2")
 ```
 
-General information (tutorials) on how to use COSMOS and MOFA2, see [COSMOS]{<https://saezlab.github.io/cosmosR/articles/tutorial.html>} and [MOFA2]{<https://biofam.github.io/MOFA2/tutorials.html>}.
+General information (tutorials) on how to use COSMOS and MOFA2, see [COSMOS](https://saezlab.github.io/cosmosR/articles/tutorial.html) and [MOFA2](https://biofam.github.io/MOFA2/tutorials.html).
 
 For data manipulation, visualization, etc. further packages are needed which are loaded here along with MOFA2 and COSMOS.
 
@@ -62,9 +62,9 @@ library(RCy3)
 
 ### From omics data to MOFA ready input
 
-Since extensive pre-processing is beyond the scope of this tutorial, here only the transformation of pre-processed single omics data to a long data.frame (columns: "sample", "group", "feature", "view", "value") is shown. For more details and information regarding appropriate input, please refer to the MOFA tutorial [MOFA2: training a model in R]{<https://raw.githack.com/bioFAM/MOFA2_tutorials/master/R_tutorials/getting_started_R.html>}. The raw data is accessed through [NCI60 cellminer]{<https://discover.nci.nih.gov/cellminer/home.do>} and the scripts for pre-processing can be found in the associated folder.
+Since extensive pre-processing is beyond the scope of this tutorial, here only the transformation of pre-processed single omics data to a long data.frame (columns: "sample", "group", "feature", "view", "value") is shown. For more details and information regarding appropriate input, please refer to the MOFA tutorial [MOFA2: training a model in R](https://raw.githack.com/bioFAM/MOFA2_tutorials/master/R_tutorials/getting_started_R.html). The raw data is accessed through [NCI60 cellminer](https://discover.nci.nih.gov/cellminer/home.do) and the scripts for pre-processing can be found in the associated folder.
 
-Here, we have the following views (with samples as columns and genes as rows): transcriptomics (RNA-seq [<PMID:31113817>]{<https://pubmed.ncbi.nlm.nih.gov/31113817/>}), proteomics (SWATH (Mass spectrometry) [<PMID:31733513>]{<https://pubmed.ncbi.nlm.nih.gov/31733513/>)} and metabolomics (LC/MS & GC/MS (Mass spectrometry) [DTP NCI60 data]{<https://wiki.nci.nih.gov/display/NCIDTPdata/Molecular+Target+Data>}). The group information is stored inside the RNA metadata and based on transcription factor clustering (see scripts/RNA/Analyze_RNA.R). Further, only samples are kept for which each omic is available (however this is not necessary since MOFA2 is able to impute data).
+Here, we have the following views (with samples as columns and genes as rows): transcriptomics (RNA-seq [<PMID:31113817>](https://pubmed.ncbi.nlm.nih.gov/31113817/)), proteomics (SWATH (Mass spectrometry) [<PMID:31733513>](https://pubmed.ncbi.nlm.nih.gov/31733513/>)} and metabolomics (LC/MS & GC/MS (Mass spectrometry) [DTP NCI60 data](https://wiki.nci.nih.gov/display/NCIDTPdata/Molecular+Target+Data)). The group information is stored inside the RNA metadata and based on transcription factor clustering (see scripts/RNA/Analyze_RNA.R). Further, only samples are kept for which each omic is available (however this is not necessary since MOFA2 is able to impute data).
 
 ```{r Preparing MOFA input, message=FALSE}
 # Transcriptomics
@@ -167,7 +167,7 @@ We have successfully combined single omic data sets to a long multi-omics data f
 
 ### MOFA run
 
-After pre-processing the data into MOFA appropriate input, let's perform the MOFA analysis. To change specific MOFA options the function write_MOFA_options_file is used. For more information regarding option setting see [MOFA option tutorial]{<https://raw.githack.com/bioFAM/MOFA2_tutorials/master/R_tutorials/getting_started_R.html>}. Since we don't know how many factors are needed to explain our data well, various maximum numbers of factors are tested. The final results can be found in the results/mofa/ folder.
+After pre-processing the data into MOFA appropriate input, let's perform the MOFA analysis. To change specific MOFA options the function write_MOFA_options_file is used. For more information regarding option setting see [MOFA option tutorial](https://raw.githack.com/bioFAM/MOFA2_tutorials/master/R_tutorials/getting_started_R.html). Since we don't know how many factors are needed to explain our data well, various maximum numbers of factors are tested. The final results can be found in the results/mofa/ folder.
 
 ```{r MOFA options function, include=FALSE}
 write_MOFA_options_file <- function(input_file, 
@@ -217,8 +217,7 @@ write_MOFA_options_file <- function(input_file,
 }
 ```
 
-```{r MOFA run}
-#for(i in c(1:length(unique(mofa_ready_data$sample)))){
+```{r MOFA run, eval=FALSE}
 for(i in c(5:15,20,length(unique(mofa_ready_data$sample)))){
 wd <- getwd()
 write_MOFA_options_file(input_file = '/data/mofa/mofa_data.csv', output_file = paste0('/results/mofa/mofa_res_',i,'factor.hdf5'), factors = i, convergence_mode = "slow", likelihoods = c('gaussian','gaussian','gaussian'))
@@ -256,7 +255,7 @@ Here, we can see that the inferred MOFA factor weights do not change drastically
 model <- model10
 ```
 
-The next part deals with the analysis and interpretation of the MOFA factors with specific focus on the factor weights. A more detailed tutorial on how to perform downstream analysis after MOFA model training can be found here [MOFA+: downstream analysis (in R)]{<https://raw.githack.com/bioFAM/MOFA2_tutorials/master/R_tutorials/downstream_analysis.html>}. In this context, it is important to emphasize that the factors can be interpreted similarly to principal components (PCs) in a principal component analysis (PCA).
+The next part deals with the analysis and interpretation of the MOFA factors with specific focus on the factor weights. A more detailed tutorial on how to perform downstream analysis after MOFA model training can be found here [MOFA+: downstream analysis (in R)](https://raw.githack.com/bioFAM/MOFA2_tutorials/master/R_tutorials/downstream_analysis.html). In this context, it is important to emphasize that the factors can be interpreted similarly to principal components (PCs) in a principal component analysis (PCA).
 
 An initial metric we can explore is the total variance ($R^2$) explained per view by our MOFA model. This helps us understand how well the model represents the data.
 
@@ -357,7 +356,7 @@ plot_data_heatmap(model,
                   annotation_colors = anno_colors)
 ```
 
-Further tools to investigate the latent factors are available inside the MOFA framework ([MOFA+: downstream analysis (in R)]{<https://raw.githack.com/bioFAM/MOFA2_tutorials/master/R_tutorials/downstream_analysis.html>}).
+Further tools to investigate the latent factors are available inside the MOFA framework ([MOFA+: downstream analysis (in R)](https://raw.githack.com/bioFAM/MOFA2_tutorials/master/R_tutorials/downstream_analysis.html)).
 
 ### From MOFA output to TF activity, ligand-receptor activity and mOOn estimation
 
@@ -559,7 +558,7 @@ abline(v = -0.2)
 abline(v = 0.2)}
 ```
 
-The threshold is set to 0.2 and -0.2 respectively. Further, the metab_to_exclude variable is later used to remove metabolites with activities below this threshold from the prior knowledge network. Moreover, metabolite names are translated into HMDB format and metabolic compartment codes (m = mitochondria, c = cytosol) as well as metab\_\_ prefix is added to HMDB IDs. More information regarding compartment codes can be found [here]{<http://bigg.ucsd.edu/compartments>}.
+The threshold is set to 0.2 and -0.2 respectively. Further, the metab_to_exclude variable is later used to remove metabolites with activities below this threshold from the prior knowledge network. Moreover, metabolite names are translated into HMDB format and metabolic compartment codes (m = mitochondria, c = cytosol) as well as metab\_\_ prefix is added to HMDB IDs. More information regarding compartment codes can be found [here](http://bigg.ucsd.edu/compartments).
 
 ```{r Filtering metabolite factor weights, message=FALSE, warning=FALSE, error=FALSE, results='hide'}
 metab_to_HMDB <- as.data.frame(
@@ -574,7 +573,7 @@ metab_to_exclude <- metab_inputs[abs(metab_inputs) < 0.2]
 metab_inputs <- metab_inputs[abs(metab_inputs) > 0.2]
 ```
 
-Next, the prior knowledge network (PKN) is loaded. To see how the full meta PKN was assembled, see [PKN]{<https://github.com/saezlab/meta_PKN_BIGG.git>}. Since we are not interested in including transcription factors and metabolites that were previously filtered out, we also remove the respective nodes from the PKN.
+Next, the prior knowledge network (PKN) is loaded. To see how the full meta PKN was assembled, see [PKN](https://github.com/saezlab/meta_PKN_BIGG.git). Since we are not interested in including transcription factors and metabolites that were previously filtered out, we also remove the respective nodes from the PKN.
 
 ```{r Meta network}
 ## Load and filter meta network
@@ -599,7 +598,7 @@ save(rec_to_TF_cosmos_input, file = "data/cosmos/rec_to_TF_cosmos_input.Rdata")
 
 At this point, we can perform the COSMOS analysis. Firstly, the options for the CARNIVAL run such as the time limit and min gap tolerance are set and the user must provide a path to its CPLEX executable. You can check the CARNIVAL_options variable to see all possible options that can be adjusted.
 
-```{r Carnival options pre-run}
+```{r Carnival options pre-run 1}
 ## Set CARNIVAL options to solve pre-optimization problem
 my_options <- default_CARNIVAL_options(solver = "cplex")
 my_options$solverPath <- "/Applications/CPLEX_Studio221/cplex/bin/x86-64_osx/cplex"
@@ -610,9 +609,9 @@ my_options$timelimit <- 360
 my_options$limitPop <- 1000
 ```
 
-Here, we are trying to find the "forward" network causally connecting the signaling data to metabolic data by using Carnival's ILP solution and the PKN. To further simplify the prior knowledge network (and perform checks on the input data), the pre-processing function of COSMOS is used. Details about the options can be found in the documentation as well as in the [COSMOS tutorial]{<https://saezlab.github.io/cosmosR/articles/tutorial.html>}.
+Here, we are trying to find the "forward" network causally connecting the signaling data to metabolic data by using Carnival's ILP solution and the PKN. To further simplify the prior knowledge network (and perform checks on the input data), the pre-processing function of COSMOS is used. Details about the options can be found in the documentation as well as in the [COSMOS tutorial](https://saezlab.github.io/cosmosR/articles/tutorial.html).
 
-```{r COSMOS pre-run forward network}
+```{r COSMOS pre-run forward network 1, eval=FALSE}
 pre_run_rec_to_TF <- preprocess_COSMOS_signaling_to_metabolism(meta_network = meta_network,
                                                                signaling_data = upstream_inputs_filtered,
                                                                metabolic_data = downstream_inputs_filtered,
@@ -625,7 +624,7 @@ pre_run_rec_to_TF <- preprocess_COSMOS_signaling_to_metabolism(meta_network = me
 
 In this part, we can set up the options for the optimization run. The running time should be much higher here than in pre-optimization. You can increase the number of threads to use if you have many available CPUs.
 
-```{r Carnival options run}
+```{r Carnival options run 1}
 ## Set CARNIVAL options to solve optimization problem
 my_options$mipGAP <- 0.05
 my_options$threads <- 2
@@ -635,7 +634,7 @@ my_options$limitPop <- 1000
 
 After pre-optimization, we can perform the actual COSMOS run using the pre-optimized solution.
 
-```{r COSMOS run forward network, echo=FALSE}
+```{r COSMOS run forward network 1, eval=FALSE}
 run_rec_to_TF <- run_COSMOS_signaling_to_metabolism(data = pre_run_rec_to_TF,
                                                     CARNIVAL_options = my_options)
 
@@ -644,8 +643,9 @@ save(run_rec_to_TF, file = "results/cosmos/run_rec_to_TF.Rdata")
 
 In order to analyze the gained sub-network, we first process the COSMOS result by extracting the list of interactions (nodes, sign, weight) in the simple interaction format (SIF) and by extracting a list of accompanying attributes (ATT). Here, we can also remove nodes with average activity of 0 as well as with weight of 0.
 
-```{r Processing COSMOS output}
+```{r Processing COSMOS output 1}
 ## COSMOS output evaluation
+load("results/cosmos/run_rec_to_TF.Rdata")
 
 SIF_rec_to_TF <- as.data.frame(run_rec_to_TF$weightedSIF)
 SIF_rec_to_TF <- SIF_rec_to_TF[which(SIF_rec_to_TF$Weight != 0),]
@@ -688,7 +688,7 @@ TF_to_lig_cosmos_input <- list(upstream_inputs_filtered, downstream_inputs_filte
 save(TF_to_lig_cosmos_input, file = "data/cosmos/TF_to_lig_cosmos_input.Rdata")
 ```
 
-```{r Carnival options pre-run}
+```{r Carnival options pre-run 2}
 ## Set CARNIVAL options to solve optimization problem
 my_options$mipGAP <- 0.05
 my_options$threads <- 2
@@ -698,7 +698,7 @@ my_options$limitPop <- 1000
 
 After setting the variables for the CPLEX solver, we can perform the pre-optimization run ...
 
-```{r COSMOS pre-run forward network}
+```{r COSMOS pre-run forward network 2, eval=FALSE}
 pre_run_TF_to_lig <- preprocess_COSMOS_signaling_to_metabolism(meta_network = meta_network, 
                                                                signaling_data = upstream_inputs_filtered,
                                                                metabolic_data = downstream_inputs_filtered,
@@ -711,7 +711,7 @@ pre_run_TF_to_lig <- preprocess_COSMOS_signaling_to_metabolism(meta_network = me
 
 ... set the options for the actual run ...
 
-```{r Carnival options run}
+```{r Carnival options run 2}
 ## Set CARNIVAL options to solve optimization problem
 my_options$mipGAP <- 0.05
 my_options$threads <- 4
@@ -721,7 +721,7 @@ my_options$limitPop <- 1000
 
 ... and perform the optimization.
 
-```{r COSMOS run forward network}
+```{r COSMOS run forward network 2, eval=FALSE}
 run_TF_to_lig <- run_COSMOS_signaling_to_metabolism(data = pre_run_TF_to_lig,
                                                     CARNIVAL_options = my_options)
 
@@ -730,7 +730,9 @@ save(run_TF_to_lig, file = "results/cosmos/run_TF_to_lig.Rdata")
 
 Again, we extract the information from the determined network and filter out inactive nodes.
 
-```{r Processing COSMOS output}
+```{r Processing COSMOS output 2}
+load("results/cosmos/run_TF_to_lig.Rdata")
+
 SIF_TF_to_lig <- as.data.frame(run_TF_to_lig$weightedSIF)
 SIF_TF_to_lig <- SIF_TF_to_lig[which(SIF_TF_to_lig$Weight != 0),]
 
@@ -957,7 +959,7 @@ pathway_ORA_NABA_KEGG_GOBP_all <- as.data.frame(decoupleR::run_ora(mat = mat,
 
 After the ORA has been performed, the result is returned as a data frame specifying enriched pathways with a p value and a corresponding score $(-log_{10}(p)$). We can visualize the results with a ggplot showing the highest scoring pathways.
 
-```{r Visualization of ORA result}
+```{r Visualization of ORA result 1}
 pathway_ORA_NABA_KEGG_GOBP_all <- pathway_ORA_NABA_KEGG_GOBP_all[order(pathway_ORA_NABA_KEGG_GOBP_all$score, decreasing = T),]
 
 head(pathway_ORA_NABA_KEGG_GOBP_all, n = 25)
@@ -979,7 +981,7 @@ Here, for instance, we can see that proteins from pathways in cancer (KEGG) are 
 
 We can further identify and highlight the overlap between nodes present in our network and proteins from the (top) significantly enriched KEGG/NABA/GOBP pathways.
 
-```{r Visualization of ORA result}
+```{r Visualization of ORA result 2}
 sig_pathways <- pathway_ORA_NABA_KEGG_GOBP_all[pathway_ORA_NABA_KEGG_GOBP_all$score > 0,"source"]
 
 pathways_adjacency <- dcast(pathways_NABA_KEGG_GOBP, gene~term)
@@ -1058,7 +1060,7 @@ for(node in background){
 save(pathway_ORA_NABA_KEGG_GOBP_list, file = "results/pathway_enrichment/pathway_ORA_NABA_KEGG_GOBP_list.RData")
 ```
 
-```{r Visualization of ORA result}
+```{r Visualization of ORA result 3}
 load("results/pathway_enrichment/pathway_ORA_NABA_KEGG_GOBP_list.RData")
 pathway_ORA_NABA_KEGG_GOBP_combined <- data.frame(Reduce(function(x,y) merge(x,y,all.x = T, all.y = T), pathway_ORA_NABA_KEGG_GOBP_list))
 row.names(pathway_ORA_NABA_KEGG_GOBP_combined) <- pathway_ORA_NABA_KEGG_GOBP_combined$pathway
@@ -1070,7 +1072,7 @@ pheatmap(pathway_ORA_NABA_KEGG_GOBP_combined, fontsize = 6, cluster_rows = T, sh
 
 Since cancer cell lines are considered here, we can specifically look at known over-activated cancer pathways.
 
-```{r Visualization of ORA result}
+```{r Visualization of ORA result 4}
 cancer_control <- pathway_ORA_NABA_KEGG_GOBP_combined["KEGG_PATHWAYS_IN_CANCER",]
 cancer_control <- t(cancer_control[,order(cancer_control[1,], decreasing = F)])
 ggplot(cancer_control)+geom_point(aes(reorder(rownames(cancer_control), KEGG_PATHWAYS_IN_CANCER, increasing = T), KEGG_PATHWAYS_IN_CANCER))+ theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
@@ -1078,7 +1080,7 @@ ggplot(cancer_control)+geom_point(aes(reorder(rownames(cancer_control), KEGG_PAT
 
 Also specific nodes (e.g. SRC) can be inspected to visualize certain pathway involvement.
 
-```{r Visualization of ORA result}
+```{r Visualization of ORA result 5}
 SRC_pathway <- pathway_ORA_NABA_KEGG_GOBP_list[["SRC"]][order(pathway_ORA_NABA_KEGG_GOBP_list[["SRC"]]$SRC, decreasing = T),][pathway_ORA_NABA_KEGG_GOBP_list[["SRC"]][order(pathway_ORA_NABA_KEGG_GOBP_list[["SRC"]]$SRC, decreasing = T),]$SRC,]
 ggplot(SRC_pathway)+geom_point(aes(reorder(pathway, SRC, increasing = T), SRC))+ theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
@@ -1086,7 +1088,7 @@ HRAS_pathway <- pathway_ORA_NABA_KEGG_GOBP_list[["HRAS"]][order(pathway_ORA_NABA
 ggplot(HRAS_pathway)+geom_point(aes(reorder(pathway, HRAS, increasing = T), HRAS))+ theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 ```
 
-To compare the ORA result of the final network, we can also perform principal component gene set analysis ([PCGSA]{<https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4543476/%7D>) on the MOFA factors containing the protein weights as well as the RNA weights. The result can then be inspected as previously. Further information can be found here: [MOFA2 GSEA]{<https://raw.githack.com/bioFAM/MOFA2_tutorials/master/R_tutorials/GSEA.html>}
+To compare the ORA result of the final network, we can also perform principal component gene set analysis ([PCGSA](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4543476/%7D)) on the MOFA factors containing the protein weights as well as the RNA weights. The result can then be inspected as previously. Further information can be found here: [MOFA2 GSEA](https://raw.githack.com/bioFAM/MOFA2_tutorials/master/R_tutorials/GSEA.html).
 
 ```{r PC-GSA analysis with MOFA factors + visualization}
 pathways_factor <- pathways_NABA_KEGG_GOBP %>%
@@ -1156,13 +1158,13 @@ ggplot(factor_GSEA_RNA_df[factor_GSEA_RNA_df$score > 7.5,]) +
 
 Interestingly, it becomes evident in the protein view that although Factor 4 explains not the most of the variance in the proteomics data, it explains the variance of the proteins in the ECM-related pathways (NABA pathways) important for cell reorganization in cancer. Moreover, since RNA transcripts are intermediates to proteins, transcriptomics data can potentially lead to identify over-activated pathways.
 
-Further downstream analyses of the network model (e.g. using [CytoScape]{<https://genome.cshlp.org/content/13/11/2498>}) and the MOFA model (e.g. further comparisons before and after COSMOS) can be performed. In order to perform more targeted analyses related to GSA/GSEA and thus reduce the complexity, it is recommended to identify and extract pathways of interest prior to ORA/PCGSA.
+Further downstream analyses of the network model (e.g. using [CytoScape](https://genome.cshlp.org/content/13/11/2498)) and the MOFA model (e.g. further comparisons before and after COSMOS) can be performed. In order to perform more targeted analyses related to GSA/GSEA and thus reduce the complexity, it is recommended to identify and extract pathways of interest prior to ORA/PCGSA.
 
 ### Network visualization via CytoScape
 
-Here, short reproducible analyses of both the full network as well as a "MYC" sub-network are shown using [CytoScape's R implementation: RCy3]{<https://bioconductor.org/packages/release/bioc/html/RCy3.html>}. For further installation and set-up please refer to the [bioconductor]{<https://bioconductor.org/packages/release/bioc/html/RCy3.html>} page. Before running this code, we have to start a CytoScape session. Further, for better visualization, we first install the [yFiles Layout Algorithms app]{<https://www.yworks.com/products/yfiles-layout-algorithms-for-cytoscape>}. However, since yFiles do not support CytoScape automation (RCy3), we have to manually reshape the network using $\textit{Layout > yFiles Hierarchic Layout}$ inside CytoScape.
+Here, short reproducible analyses of both the full network as well as a "MYC" sub-network are shown using [CytoScape's R implementation: RCy3](https://bioconductor.org/packages/release/bioc/html/RCy3.html). For further installation and set-up please refer to the [bioconductor](https://bioconductor.org/packages/release/bioc/html/RCy3.html) page. Before running this code, we have to start a CytoScape session. Further, for better visualization, we first install the [yFiles Layout Algorithms app](https://www.yworks.com/products/yfiles-layout-algorithms-for-cytoscape). However, since yFiles do not support CytoScape automation (RCy3), we have to manually reshape the network using $\textit{Layout > yFiles Hierarchic Layout}$ inside CytoScape.
 
-```{r CytoScape app installation}
+```{r CytoScape app installation, eval=FALSE}
 installation_responses <- c()
 
 #list of app to install
@@ -1193,14 +1195,14 @@ if(length(cytoscape_version) == 3 && as.numeric(cytoscape_version[1]>=3)
 
 Let's create a new style ("dataStyle").
 
-```{r Create preferred style}
+```{r Create preferred style, eval=FALSE}
 style.name = "dataStyle"
 createVisualStyle(style.name)
 ```
 
 First, we can display the full network and set our preferred style.
 
-```{r Create full network in CytoScape}
+```{r Create full network in CytoScape, eval=FALSE}
 nodes <- data.frame(id = combined_ATT_reduced$Nodes, NodeType = as.integer(combined_ATT_reduced$NodeType), mofa_weights = as.numeric(combined_ATT_reduced$mofa_weights), Activity = combined_ATT_reduced$Activity, stringsAsFactors = F)
 
 nodes$mofa_weights[is.na(nodes$mofa_weights)] <- 0
@@ -1208,35 +1210,35 @@ nodes$mofa_weights[is.na(nodes$mofa_weights)] <- 0
 edges <- data.frame(source=combined_SIF_reduced$Node1, target = combined_SIF_reduced$Node2, sign = combined_SIF_reduced$Sign, weight = combined_SIF_reduced$Weight,stringsAsFactors = F)
 
 createNetworkFromDataFrames(nodes,edges,title = "Full COSMOS network", table.key.column = "name")
-setVisualStyle(style.name)
+setVisualStyle(style.name, network = "Full COSMOS network")
 
-setEdgeTargetArrowShapeMapping(table.column = "sign",table.column.values =  list("-1","1"), shapes = list("T","ARROW"), style.name = style.name)
+setEdgeTargetArrowShapeMapping(table.column = "sign",table.column.values =  list("-1","1"), shapes = list("T","ARROW"), style.name = style.name, network = "Full COSMOS network")
 setEdgeLineWidthDefault(2, style.name)
 
-duplicated_edges <- as.data.frame(getTableColumns('edge','sign'))
+duplicated_edges <- as.data.frame(getTableColumns('edge','sign', network = "Full COSMOS network"))
 duplicated_edges[,2] <- rownames(duplicated_edges)
 duplicated_edges <- duplicated_edges[is.na(duplicated_edges$sign),2]
 selectEdges(duplicated_edges, network = "Full COSMOS network")
 deleteSelectedEdges(network = "Full COSMOS network")
 
 setNodeShapeDefault("ROUND_RECTANGLE", style.name) #remember to specify your style.name!
-setNodeShapeMapping(table.column = "NodeType", table.column.values = list("1","2","3"),shapes = list("Octagon","VEE","Triangle"), style.name = style.name)
+setNodeShapeMapping(table.column = "NodeType", table.column.values = list("1","2","3"),shapes = list("Octagon","VEE","Triangle"), style.name = style.name, network = "Full COSMOS network")
 setNodeColorDefault("#89D0F5", style.name)
-setNodeLabelMapping("name", style.name)
+setNodeLabelMapping("name", style.name, network = "Full COSMOS network")
 setNodeHeightDefault(35,style.name)
 setNodeFontSizeDefault(12,style.name)
 setNodeWidthDefault(75,style.name)
 setNodeBorderWidthDefault(12, style.name = style.name)
 
 #Set node and border color based on data min and max values (mofa weights, cosmos weights)
-mofa_weights = getTableColumns('node','mofa_weights')  
+mofa_weights = getTableColumns('node','mofa_weights', network = "Full COSMOS network")  
 mofa_weights_min = min(mofa_weights[,1],na.rm=TRUE)
 mofa_weights_max = max(mofa_weights[,1],na.rm=TRUE)
 mofa_data.values = c(mofa_weights_min,0,mofa_weights_max)
 border.colors <- c(rev(brewer.pal(length(mofa_data.values), "RdBu")))
 setNodeBorderColorMapping('mofa_weights', mofa_data.values, border.colors, style.name = style.name, network = "Full COSMOS network")
 
-cosmos_weights = getTableColumns('node','Activity')
+cosmos_weights = getTableColumns('node','Activity', network = "Full COSMOS network")
 cosmos_weights_min = min(cosmos_weights[,1],na.rm=TRUE)
 cosmos_weights_max = max(cosmos_weights[,1],na.rm=TRUE)
 cosmos_data.values = c(cosmos_weights_min,0,cosmos_weights_max)
@@ -1246,7 +1248,7 @@ setNodeColorMapping('Activity',cosmos_data.values, node.colors, style.name = sty
 
 Here, the sub-network of neighbors within 4-steps-distance of MYC and HRAS is visualized.
 
-```{r Create sub-networks in CytoScape}
+```{r Create sub-networks in CytoScape, eval=FALSE}
 for (gene in c("MYC", "HRAS")) {
   
   nodes <- data.frame(id = subnetwork_per_gene[[gene]]$ATT$Nodes, NodeType = as.integer(subnetwork_per_gene[[gene]]$ATT$NodeType), mofa_weights = as.numeric(subnetwork_per_gene[[gene]]$ATT$mofa_weights), Activity = subnetwork_per_gene[[gene]]$ATT$Activity, stringsAsFactors = F)
@@ -1256,35 +1258,35 @@ for (gene in c("MYC", "HRAS")) {
   edges <- data.frame(source=subnetwork_per_gene[[gene]]$SIF$source, target = subnetwork_per_gene[[gene]]$SIF$target, sign = subnetwork_per_gene[[gene]]$SIF$sign, weight = subnetwork_per_gene[[gene]]$SIF$interaction,stringsAsFactors = F)
   
   createNetworkFromDataFrames(nodes,edges,title = paste("Sub-network",gene), table.key.column = "name")
-  setVisualStyle(style.name)
+  setVisualStyle(style.name, network = paste("Sub-network",gene))
   
   #Set node and border color based on data min and max values (mofa weights, cosmos weights)
-  mofa_weights = getTableColumns('node','mofa_weights')  
+  mofa_weights = getTableColumns('node','mofa_weights', network = paste("Sub-network",gene))  
   mofa_weights_min = min(mofa_weights[,1],na.rm=TRUE)
   mofa_weights_max = max(mofa_weights[,1],na.rm=TRUE)
   mofa_data.values = c(mofa_weights_min,0,mofa_weights_max)
   border.colors <- c(rev(brewer.pal(length(mofa_data.values), "RdBu")))
   setNodeBorderColorMapping('mofa_weights', mofa_data.values, border.colors, style.name = style.name, network = paste("Sub-network",gene))
   
-  setEdgeTargetArrowShapeMapping(table.column = "sign",table.column.values =  list("-1","1"), shapes = list("T","ARROW"), style.name = style.name)
+  setEdgeTargetArrowShapeMapping(table.column = "sign",table.column.values =  list("-1","1"), shapes = list("T","ARROW"), style.name = style.name, network = paste("Sub-network",gene))
   setEdgeLineWidthDefault(2, style.name)
   
-  duplicated_edges <- as.data.frame(getTableColumns('edge','sign'))
+  duplicated_edges <- as.data.frame(getTableColumns('edge','sign', network = paste("Sub-network",gene)))
   duplicated_edges[,2] <- rownames(duplicated_edges)
   duplicated_edges <- duplicated_edges[is.na(duplicated_edges$sign),2]
   selectEdges(duplicated_edges, network = paste("Sub-network",gene))
   deleteSelectedEdges(network = paste("Sub-network",gene))
   
   setNodeShapeDefault("ROUND_RECTANGLE", style.name) #remember to specify your style.name!
-  setNodeShapeMapping(table.column = "NodeType", table.column.values = list("1","2","3"),shapes = list("Octagon","VEE","Triangle"), style.name = style.name)
+  setNodeShapeMapping(table.column = "NodeType", table.column.values = list("1","2","3"),shapes = list("Octagon","VEE","Triangle"), style.name = style.name, network = paste("Sub-network",gene))
   setNodeColorDefault("#89D0F5", style.name)
-  setNodeLabelMapping("name", style.name)
+  setNodeLabelMapping("name", style.name, network = paste("Sub-network",gene))
   setNodeHeightDefault(35,style.name)
   setNodeFontSizeDefault(12,style.name)
   setNodeWidthDefault(75,style.name)
   setNodeBorderWidthDefault(12, style.name = style.name)
   
-  cosmos_weights = getTableColumns('node','Activity')
+  cosmos_weights = getTableColumns('node','Activity', network = paste("Sub-network",gene))
   cosmos_weights_min = min(cosmos_weights[,1],na.rm=TRUE)
   cosmos_weights_max = max(cosmos_weights[,1],na.rm=TRUE)
   cosmos_data.values = c(cosmos_weights_min,0,cosmos_weights_max)
@@ -1295,7 +1297,7 @@ for (gene in c("MYC", "HRAS")) {
 
 Additionally, we can highlight interactions from specific pathways (e.g. MAPK signaling pathway).
 
-```{r Create sub-network for specific pathway in CytoScape}
+```{r Create sub-network for specific pathway in CytoScape, eval=FALSE}
 
 ##https://www.genome.jp/entry/N00001
 EGF_EGFR_RAS_ERK_pathway_extended <- c("EGF", "EGFR", "GRB2", "SOS1", "SOS2", "HRAS", "KRAS", "NRAS", "ARAF", "BRAF", "RAF1", "MAP2K1", "MAP2K2", "MAPK1", "MAPK3", "CCND1", "CREBBP", "MYC", "SRF", "FOS")
@@ -1307,49 +1309,48 @@ edges_MAPK_reduced_selected_start_end <- rbind(edges_MAPK_reduced_selected, edge
 nodes_MAPK_reduced_selected_start_end <- nodes[nodes$id %in% edges_MAPK_reduced_selected_start_end$source | nodes$id %in% edges_MAPK_reduced_selected_start_end$target,]
 
 createNetworkFromDataFrames(nodes_MAPK_reduced_selected_start_end,edges_MAPK_reduced_selected_start_end,title = "EGF_EGFR_RAS_ERK_pathway_start_end", table.key.column = "name")
-setVisualStyle(style.name)
+setVisualStyle(style.name, network = "EGF_EGFR_RAS_ERK_pathway_start_end")
 
 selectNodes(list("ABL1", "CDK1", "KITLG", "PTK2B", "PTPN6", "RARA", "RELA", "JUNB"), by.col = "name", network = "EGF_EGFR_RAS_ERK_pathway_start_end")
 deleteSelectedNodes(network = "EGF_EGFR_RAS_ERK_pathway_start_end")
 
-setEdgeTargetArrowShapeMapping(table.column = "sign",table.column.values =  list("-1","1"), shapes = list("T","ARROW"), style.name = style.name)
+setEdgeTargetArrowShapeMapping(table.column = "sign",table.column.values =  list("-1","1"), shapes = list("T","ARROW"), style.name = style.name, network = "EGF_EGFR_RAS_ERK_pathway_start_end")
 setEdgeLineWidthDefault(2, style.name)
 
-duplicated_edges <- as.data.frame(getTableColumns('edge','sign'))
+duplicated_edges <- as.data.frame(getTableColumns('edge','sign', network = "EGF_EGFR_RAS_ERK_pathway_start_end"))
 duplicated_edges[,2] <- rownames(duplicated_edges)
 duplicated_edges <- duplicated_edges[is.na(duplicated_edges$sign),2]
 selectEdges(duplicated_edges, network = "EGF_EGFR_RAS_ERK_pathway_start_end")
 deleteSelectedEdges(network = "EGF_EGFR_RAS_ERK_pathway_start_end")
 
 setNodeShapeDefault("ROUND_RECTANGLE", style.name) #remember to specify your style.name!
-setNodeShapeMapping(table.column = "NodeType", table.column.values = list("1","2","3"),shapes = list("Octagon","VEE","Triangle"), style.name = style.name)
+setNodeShapeMapping(table.column = "NodeType", table.column.values = list("1","2","3"),shapes = list("Octagon","VEE","Triangle"), style.name = style.name, network = "EGF_EGFR_RAS_ERK_pathway_start_end")
 setNodeColorDefault("#89D0F5", style.name)
-setNodeLabelMapping("name", style.name)
+setNodeLabelMapping("name", style.name, network = "EGF_EGFR_RAS_ERK_pathway_start_end")
 setNodeHeightDefault(35,style.name)
 setNodeFontSizeDefault(12,style.name)
 setNodeWidthDefault(75,style.name)
 setNodeBorderWidthDefault(12, style.name = style.name)
 
 #Set node and border color based on data min and max values (mofa weights, cosmos weights)
-mofa_weights = getTableColumns('node','mofa_weights')  
+mofa_weights = getTableColumns('node','mofa_weights', network = "EGF_EGFR_RAS_ERK_pathway_start_end")  
 mofa_weights_min = min(mofa_weights[,1],na.rm=TRUE)
 mofa_weights_max = max(mofa_weights[,1],na.rm=TRUE)
 mofa_data.values = c(mofa_weights_min,0,mofa_weights_max)
 border.colors <- c(rev(brewer.pal(length(mofa_data.values), "RdBu")))
 setNodeBorderColorMapping('mofa_weights', mofa_data.values, border.colors, style.name = style.name, network = "EGF_EGFR_RAS_ERK_pathway_start_end")
 
-cosmos_weights = getTableColumns('node','Activity')
+cosmos_weights = getTableColumns('node','Activity', network = "EGF_EGFR_RAS_ERK_pathway_start_end")
 cosmos_weights_min = min(cosmos_weights[,1],na.rm=TRUE)
 cosmos_weights_max = max(cosmos_weights[,1],na.rm=TRUE)
 cosmos_data.values = c(cosmos_weights_min,0,cosmos_weights_max)
 node.colors <- c(rev(brewer.pal(length(cosmos_data.values), "RdBu")))
 setNodeColorMapping('Activity',cosmos_data.values, node.colors, style.name = style.name, network = "EGF_EGFR_RAS_ERK_pathway_start_end")
-
 ```
 
 Finally, we can save the CytoScape session and export static images of the networks as e.g. PDF files.
 
-```{r Save pdf files and CytoScape session}
+```{r Save pdf files and CytoScape session, eval=FALSE}
 exportImage(filename = "results/cytoscape/full_network.pdf", type = "PDF", resolution = 900, network = "Full COSMOS network")
 for (gene in c("MYC", "HRAS")) {
   exportImage(filename = paste0("results/cytoscape/subnetwork_",gene,"_analysis.pdf"), type = "PDF", resolution = 900, network = paste("Sub-network",gene))
@@ -1357,6 +1358,10 @@ for (gene in c("MYC", "HRAS")) {
 exportImage(filename = "results/cytoscape/subnetwork_EGF_EGFR_RAS_ERK_pathway_extended", type = "PDF", resolution = 900, network = "EGF_EGFR_RAS_ERK_pathway_start_end")
 
 saveSession(filename = "results/cytoscape/cosmos_network_analysis.cys")
+```
+
+```{r Full COSMOS network image, echo = FALSE, message=FALSE, fig.align='center', fig.cap='MAPK signaling pathway', out.height = "460px", out.width='800px'}
+knitr::include_graphics("results/cytoscape/subnetwork_EGF_EGFR_RAS_ERK_pathway_extended.pdf")
 ```
 
 ### Session info
