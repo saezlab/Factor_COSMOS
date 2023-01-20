@@ -9,8 +9,6 @@ library(dplyr)
 
 data("meta_network")
 
-#Seems to be an error in omnipath
-meta_network <- meta_network[-which(meta_network$source == "PRKCA" & meta_network$target == "SRC"),]
 meta_network <- meta_network[-which(meta_network$source == meta_network$target),]
 
 load("data/cosmos/cosmos_inputs.RData")
@@ -113,9 +111,9 @@ SIF_full <- unique(SIF_full)
 ATT_full <- as.data.frame(rbind(ATT,ATT_back))
 ATT_full <- unique(ATT_full)
 
-S_nodes <- ATT_full[ATT_full$NodeType == "S","Nodes"]
-T_nodes <- ATT_full[ATT_full$NodeType == "T","Nodes"]
-C_nodes <- union(S_nodes,T_nodes)
+P_nodes <- ATT_full[ATT_full$NodeType == "P","Nodes"]
+M_nodes <- ATT_full[ATT_full$NodeType == "M","Nodes"]
+C_nodes <- union(P_nodes,M_nodes)
 # C_nodes <- C_nodes[which(C_nodes %in% c(SIF$Node1,SIF$Node2) & C_nodes %in% c(SIF_back$Node1,SIF_back$Node2))]
 
 ATT_full <- ATT_full[,-6]
@@ -123,7 +121,7 @@ ATT_full <- ATT_full[,-6]
 ATT_full <- ATT_full %>% group_by(Nodes) %>% summarise_each(funs(mean(., na.rm = TRUE)))
 ATT_full <- as.data.frame(ATT_full)
 
-ATT_full$NodeType <- ifelse(ATT_full$Nodes %in% C_nodes,"C",ifelse(ATT_full$Nodes %in% S_nodes,"S",ifelse(ATT_full$Nodes %in% T_nodes,"T","")))
+ATT_full$NodeType <- ifelse(ATT_full$Nodes %in% C_nodes,"C",ifelse(ATT_full$Nodes %in% P_nodes,"P",ifelse(ATT_full$Nodes %in% M_nodes,"M","")))
 
 write_csv(SIF_full, file = paste("results/",paste(cell_line, "_SIF_full.csv",sep = ""), sep = ""))
 write_csv(ATT_full, file = paste("results/",paste(cell_line, "_ATT_full.csv",sep = ""), sep = ""))
