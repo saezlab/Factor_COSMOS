@@ -1,0 +1,221 @@
+---
+title: "Network visualization via CytoScape"
+author: "Pascal Lafrenz"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+Here, short reproducible analyses of both the full network as well as sub-networks are shown using [CytoScape's R implementation: RCy3](https://bioconductor.org/packages/release/bioc/html/RCy3.html). For further installation and set-up please refer to the [bioconductor](https://bioconductor.org/packages/release/bioc/html/RCy3.html) page. Before running this code, we have to start a CytoScape session. Further, for better visualization, we first install the [yFiles Layout Algorithms app](https://www.yworks.com/products/yfiles-layout-algorithms-for-cytoscape). However, since yFiles do not support CytoScape automation (RCy3), we have to manually reshape the network using $\textit{Layout > yFiles Hierarchic Layout}$ inside CytoScape.
+
+```{r Loading packages, message=FALSE}
+library(RCy3)
+library(RColorBrewer)
+```
+
+```{r CytoScape app installation, eval=FALSE}
+installation_responses <- c()
+
+#list of app to install
+cyto_app_toinstall <- c("yFiles Layout Algorithms")
+
+cytoscape_version <- unlist(strsplit( cytoscapeVersionInfo()['cytoscapeVersion'],split = "\\."))
+if(length(cytoscape_version) == 3 && as.numeric(cytoscape_version[1]>=3) 
+   && as.numeric(cytoscape_version[2]>=7)){
+  for(i in 1:length(cyto_app_toinstall)){
+    #check to see if the app is installed.  Only install it if it hasn't been installed
+    if(!grep(commandsGET(paste("apps status app=\"", cyto_app_toinstall[1],"\"", sep="")), 
+             pattern = "status: Installed")){
+      installation_response <-commandsGET(paste("apps install app=\"", 
+                                                cyto_app_toinstall[i],"\"", sep=""))
+      installation_responses <- c(installation_responses,installation_response)
+    } else{
+      installation_responses <- c(installation_responses,"already installed")
+    }
+  }
+  installation_summary <- data.frame(name = cyto_app_toinstall, 
+                                     status = installation_responses)
+  
+  knitr::kable(list(installation_summary),
+  booktabs = TRUE, caption = 'A Summary of automated app installation'
+)
+}
+```
+
+Let's create a new style ("dataStyle_mofa").
+
+```{r Create preferred style, eval=FALSE}
+style.name = "dataStyle_mofa"
+createVisualStyle(style.name)
+```
+
+First, we can display the full network and set our preferred style.
+
+```{r Create full network in CytoScape, eval=FALSE}
+load("results/cosmos/res_mofamoon_combined_reduced.RData")
+combined_ATT_reduced <- res_mofa_combined_reduced[[2]]
+combined_SIF_reduced <- res_mofa_combined_reduced[[1]]
+
+nodes <- data.frame(id = combined_ATT_reduced$Nodes, NodeType = as.integer(combined_ATT_reduced$NodeType), mofa_weights = as.numeric(combined_ATT_reduced$mofa_weights), Activity = combined_ATT_reduced$Activity, stringsAsFactors = F)
+
+nodes$mofa_weights[is.na(nodes$mofa_weights)] <- 0
+
+edges <- data.frame(source=combined_SIF_reduced$Node1, target = combined_SIF_reduced$Node2, sign = combined_SIF_reduced$Sign, weight = combined_SIF_reduced$Weight,stringsAsFactors = F)
+
+createNetworkFromDataFrames(nodes,edges,title = "Full COSMOS network", table.key.column = "name", collection = "Full Network")
+setVisualStyle(style.name, network = "Full COSMOS network")
+
+setEdgeTargetArrowShapeMapping(table.column = "sign",table.column.values =  list("-1","1"), shapes = list("T","ARROW"), style.name = style.name, network = "Full COSMOS network")
+setEdgeLineWidthDefault(2, style.name)
+
+duplicated_edges <- as.data.frame(getTableColumns('edge','sign', network = "Full COSMOS network"))
+duplicated_edges[,2] <- rownames(duplicated_edges)
+duplicated_edges <- duplicated_edges[is.na(duplicated_edges$sign),2]
+selectEdges(duplicated_edges, network = "Full COSMOS network")
+deleteSelectedEdges(network = "Full COSMOS network")
+
+setNodeShapeDefault("ROUND_RECTANGLE", style.name) #remember to specify your style.name!
+setNodeShapeMapping(table.column = "NodeType", table.column.values = list("1","2","3"),shapes = list("Octagon","VEE","Triangle"), style.name = style.name, network = "Full COSMOS network")
+setNodeColorDefault("#89D0F5", style.name)
+setNodeLabelMapping("name", style.name, network = "Full COSMOS network")
+setNodeHeightDefault(35,style.name)
+setNodeFontSizeDefault(12,style.name)
+setNodeWidthDefault(75,style.name)
+setNodeBorderWidthDefault(12, style.name = style.name)
+
+#Set node and border color based on data min and max values (mofa weights, cosmos weights)
+mofa_weights = getTableColumns('node','mofa_weights', network = "Full COSMOS network")  
+mofa_weights_min = min(mofa_weights[,1],na.rm=TRUE)
+mofa_weights_max = max(mofa_weights[,1],na.rm=TRUE)
+mofa_data.values = c(mofa_weights_min,0,mofa_weights_max)
+border.colors <- c(rev(brewer.pal(length(mofa_data.values), "RdBu")))
+setNodeBorderColorMapping('mofa_weights', mofa_data.values, border.colors, style.name = style.name, network = "Full COSMOS network")
+
+cosmos_weights = getTableColumns('node','Activity', network = "Full COSMOS network")
+cosmos_weights_min = min(cosmos_weights[,1],na.rm=TRUE)
+cosmos_weights_max = max(cosmos_weights[,1],na.rm=TRUE)
+cosmos_data.values = c(cosmos_weights_min,0,cosmos_weights_max)
+node.colors <- c(rev(brewer.pal(length(cosmos_data.values), "RdBu")))
+setNodeColorMapping('Activity',cosmos_data.values, node.colors, style.name = style.name, network = "Full COSMOS network")
+```
+
+Here, the sub-network of neighbors within 4-steps-distance of MYC and HRAS is visualized.
+
+```{r Create sub-networks in CytoScape, eval=FALSE}
+style.name = "dataStyle_mofa_geneSub"
+createVisualStyle(style.name)
+
+load(file = "results/cosmos/subnetwork/subnetwork_per_gene.RData")
+
+for (gene in c("MYC", "HRAS")) {
+  
+  nodes_sub <- data.frame(id = subnetwork_per_gene[[gene]]$ATT$Nodes, NodeType = as.integer(subnetwork_per_gene[[gene]]$ATT$NodeType), mofa_weights = as.numeric(subnetwork_per_gene[[gene]]$ATT$mofa_weights), Activity = subnetwork_per_gene[[gene]]$ATT$Activity, stringsAsFactors = F)
+  
+  nodes_sub$mofa_weights[is.na(nodes_sub$mofa_weights)] <- 0
+  
+  edges <- data.frame(source=subnetwork_per_gene[[gene]]$SIF$source, target = subnetwork_per_gene[[gene]]$SIF$target, sign = subnetwork_per_gene[[gene]]$SIF$sign, weight = subnetwork_per_gene[[gene]]$SIF$interaction,stringsAsFactors = F)
+  
+  createNetworkFromDataFrames(nodes_sub,edges,title = paste("Sub-network",gene), table.key.column = "name", collection = "Sub-Network")
+  setVisualStyle(style.name, network = paste("Sub-network",gene))
+  
+  #Set node and border color based on data min and max values (mofa weights, cosmos weights)
+  mofa_weights = getTableColumns('node','mofa_weights', network = paste("Sub-network",gene))  
+  mofa_weights_min = min(mofa_weights[,1],na.rm=TRUE)
+  mofa_weights_max = max(mofa_weights[,1],na.rm=TRUE)
+  mofa_data.values = c(mofa_weights_min,0,mofa_weights_max)
+  border.colors <- c(rev(brewer.pal(length(mofa_data.values), "RdBu")))
+  setNodeBorderColorMapping('mofa_weights', mofa_data.values, border.colors, style.name = style.name, network = paste("Sub-network",gene))
+  
+  setEdgeTargetArrowShapeMapping(table.column = "sign",table.column.values =  list("-1","1"), shapes = list("T","ARROW"), style.name = style.name, network = paste("Sub-network",gene))
+  setEdgeLineWidthDefault(2, style.name)
+  
+  duplicated_edges <- as.data.frame(getTableColumns('edge','sign', network = paste("Sub-network",gene)))
+  duplicated_edges[,2] <- rownames(duplicated_edges)
+  duplicated_edges <- duplicated_edges[is.na(duplicated_edges$sign),2]
+  selectEdges(duplicated_edges, network = paste("Sub-network",gene))
+  deleteSelectedEdges(network = paste("Sub-network",gene))
+  
+  setNodeShapeDefault("ROUND_RECTANGLE", style.name) #remember to specify your style.name!
+  setNodeShapeMapping(table.column = "NodeType", table.column.values = list("1","2","3"),shapes = list("Octagon","VEE","Triangle"), style.name = style.name, network = paste("Sub-network",gene))
+  setNodeColorDefault("#89D0F5", style.name)
+  setNodeLabelMapping("name", style.name, network = paste("Sub-network",gene))
+  setNodeHeightDefault(35,style.name)
+  setNodeFontSizeDefault(12,style.name)
+  setNodeWidthDefault(75,style.name)
+  setNodeBorderWidthDefault(12, style.name = style.name)
+  
+  cosmos_weights = getTableColumns('node','Activity', network = paste("Sub-network",gene))
+  cosmos_weights_min = min(cosmos_weights[,1],na.rm=TRUE)
+  cosmos_weights_max = max(cosmos_weights[,1],na.rm=TRUE)
+  cosmos_data.values = c(cosmos_weights_min,0,cosmos_weights_max)
+  node.colors <- c(rev(brewer.pal(length(cosmos_data.values), "RdBu")))
+  setNodeColorMapping('Activity',cosmos_data.values, node.colors, style.name = style.name, network = paste("Sub-network",gene))
+}
+```
+
+Additionally, we can highlight interactions from specific pathways (e.g. MAPK signaling pathway).
+
+```{r Create sub-network for specific pathway in CytoScape, eval=FALSE}
+style.name = "dataStyle_mofa_MAPK_pathway"
+createVisualStyle(style.name)
+
+##https://www.genome.jp/entry/N00001
+EGF_EGFR_RAS_ERK_pathway_extended <- c("EGF", "EGFR", "GRB2", "SOS1", "SOS2", "HRAS", "KRAS", "NRAS", "ARAF", "BRAF", "RAF1", "MAP2K1", "MAP2K2", "MAPK1", "MAPK3", "CCND1", "CREBBP", "MYC", "SRF", "FOS")
+
+edges_MAPK_reduced_selected <- edges[edges$target %in% EGF_EGFR_RAS_ERK_pathway_extended & edges$source %in% EGF_EGFR_RAS_ERK_pathway_extended,]
+
+edges_MAPK_reduced_selected_start_end <- rbind(edges_MAPK_reduced_selected, edges[edges$target %in% "EGFR",],edges[edges$source %in% c("FOS","MYC"),])
+
+nodes_MAPK_reduced_selected_start_end <- nodes[nodes$id %in% edges_MAPK_reduced_selected_start_end$source | nodes$id %in% edges_MAPK_reduced_selected_start_end$target,]
+
+createNetworkFromDataFrames(nodes_MAPK_reduced_selected_start_end,edges_MAPK_reduced_selected_start_end,title = "EGF_EGFR_RAS_ERK_pathway_start_end", table.key.column = "name", collection = "Sub-Network")
+setVisualStyle(style.name, network = "EGF_EGFR_RAS_ERK_pathway_start_end")
+
+selectNodes(list("ABL1", "CDK1", "KITLG", "PTK2B", "PTPN6", "RARA", "RELA", "JUNB", "EGR1", "FYN", "HBEGF", "ITGB1", "JUNB", "TP53", "SRC", "CCNE1", "GNAI2", "UBE2D1", "PTPRG"), by.col = "name", network = "EGF_EGFR_RAS_ERK_pathway_start_end")
+deleteSelectedNodes(network = "EGF_EGFR_RAS_ERK_pathway_start_end")
+
+setEdgeTargetArrowShapeMapping(table.column = "sign",table.column.values =  list("-1","1"), shapes = list("T","ARROW"), style.name = style.name, network = "EGF_EGFR_RAS_ERK_pathway_start_end")
+setEdgeLineWidthDefault(2, style.name)
+
+duplicated_edges <- as.data.frame(getTableColumns('edge','sign', network = "EGF_EGFR_RAS_ERK_pathway_start_end"))
+duplicated_edges[,2] <- rownames(duplicated_edges)
+duplicated_edges <- duplicated_edges[is.na(duplicated_edges$sign),2]
+selectEdges(duplicated_edges, network = "EGF_EGFR_RAS_ERK_pathway_start_end")
+deleteSelectedEdges(network = "EGF_EGFR_RAS_ERK_pathway_start_end")
+
+setNodeShapeDefault("ROUND_RECTANGLE", style.name) #remember to specify your style.name!
+setNodeShapeMapping(table.column = "NodeType", table.column.values = list("1","2","3"),shapes = list("Octagon","VEE","Triangle"), style.name = style.name, network = "EGF_EGFR_RAS_ERK_pathway_start_end")
+setNodeColorDefault("#89D0F5", style.name)
+setNodeLabelMapping("name", style.name, network = "EGF_EGFR_RAS_ERK_pathway_start_end")
+setNodeHeightDefault(35,style.name)
+setNodeFontSizeDefault(12,style.name)
+setNodeWidthDefault(75,style.name)
+setNodeBorderWidthDefault(12, style.name = style.name)
+
+#Set node and border color based on data min and max values (mofa weights, cosmos weights)
+mofa_weights = getTableColumns('node','mofa_weights', network = "EGF_EGFR_RAS_ERK_pathway_start_end")  
+mofa_weights_min = min(mofa_weights[,1],na.rm=TRUE)
+mofa_weights_max = max(mofa_weights[,1],na.rm=TRUE)
+mofa_data.values = c(mofa_weights_min,0,mofa_weights_max)
+border.colors <- c(rev(brewer.pal(length(mofa_data.values), "RdBu")))
+setNodeBorderColorMapping('mofa_weights', mofa_data.values, border.colors, style.name = style.name, network = "EGF_EGFR_RAS_ERK_pathway_start_end")
+
+cosmos_weights = getTableColumns('node','Activity', network = "EGF_EGFR_RAS_ERK_pathway_start_end")
+cosmos_weights_min = min(cosmos_weights[,1],na.rm=TRUE)
+cosmos_weights_max = max(cosmos_weights[,1],na.rm=TRUE)
+cosmos_data.values = c(cosmos_weights_min,0,cosmos_weights_max)
+node.colors <- c(rev(brewer.pal(length(cosmos_data.values), "RdBu")))
+setNodeColorMapping('Activity',cosmos_data.values, node.colors, style.name = style.name, network = "EGF_EGFR_RAS_ERK_pathway_start_end")
+```
+
+Finally, we can save the CytoScape session and export static images of the networks as e.g. PDF files.
+
+```{r Save pdf files and CytoScape session, eval=FALSE}
+exportImage(filename = "results/cytoscape/full_network.pdf", type = "PDF", resolution = 900, network = "Full COSMOS network")
+for (gene in c("MYC", "HRAS")) {
+  exportImage(filename = paste0("results/cytoscape/subnetwork_",gene,"_analysis.pdf"), type = "PDF", resolution = 900, network = paste("Sub-network",gene))
+}
+exportImage(filename = "results/cytoscape/subnetwork_EGF_EGFR_RAS_ERK_pathway_extended", type = "PDF", resolution = 900, network = "EGF_EGFR_RAS_ERK_pathway_start_end")
+
+saveSession(filename = "results/cytoscape/cosmos_network_analysis.cys")
+```
+

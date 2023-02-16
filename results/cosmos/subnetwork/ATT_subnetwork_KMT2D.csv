@@ -1,3 +1,3 @@
 Nodes,NodeType,ZeroAct,UpAct,DownAct,AvgAct,measured,Activity,sign_activity,mofa_weights
-KMT2D,1,0,1,0,1,1,1,1,NA
+KMT2D,1,0,1,0,1,1,1,1,1.7027272397155524
 RELB,1,0,1,0,1,1,1,1,6.200429531628194

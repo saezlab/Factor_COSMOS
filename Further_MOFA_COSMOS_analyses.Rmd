@@ -1,0 +1,417 @@
+---
+title: "Further MOFA-COSMOS downstream analyses"
+author: "Pascal Lafrenz"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+In order to evaluate the data obtained from the MOFA-COSMOS pipeline downstream, further analyses can be performed.
+
+```{r Loading packages, message=FALSE}
+library(decoupleR)
+library(liana)
+library(moon)
+library(readr)
+library(pheatmap)
+library(dplyr)
+library(reshape2)
+library(MOFA2)
+library(ggplot2)
+library(RCy3)
+library(RColorBrewer)
+library(cosmosR)
+```
+
+## Calculate cell-line specific transcriptomics
+
+Firstly, we can calculate cell-line specific transcriptomic values by multiplying the MOFA factor weight (here: Factor 4) with the 'raw' transcriptomic values.
+
+```{r Calculate cell-line specific transcriptomics}
+# RNA cell-line-specific values (RNA_specific = MOFA_factor_weight * RNA_raw)
+
+## Get RNA raw values
+RNA_raw <- as.data.frame(read_csv("data/RNA/RNA_log2_FPKM_clean.csv"))
+rownames(RNA_raw) <- RNA_raw[,1]
+RNA_raw <- RNA_raw[,-1]
+RNA_raw <- melt(as.data.frame(cbind(RNA_raw,row.names(RNA_raw))))
+RNA_raw$view <- "RNA"
+RNA_raw <- RNA_raw[,c(2,1,4,3)]                 
+names(RNA_raw) <- c("sample","feature","view","value")
+
+## Get MOFA factor weights from Factor 4  
+model <- load_model('results/mofa/mofa_res_10factor.hdf5')
+meta_data <- read_csv("data/metadata/RNA_metadata_cluster.csv")[,c(1,2)]
+colnames(meta_data) <- c("sample","cluster")
+samples_metadata(model) <- meta_data[meta_data$sample %in% samples_metadata(model)$sample,]
+
+weights <- get_weights(model, views = "all", factors = "all")
+RNA_MOFA <- data.frame(weights$RNA[,4])
+RNA_MOFA <- cbind(rownames(RNA_MOFA), RNA_MOFA)
+colnames(RNA_MOFA) <- c("feature", "value")
+RNA_MOFA$feature <- gsub("_RNA","",RNA_MOFA$feature)
+
+## Calculate score
+RNA_weight_cell_line <- merge(RNA_raw, RNA_MOFA, by.x='feature', by.y='feature')
+RNA_weight_cell_line <- cbind(RNA_weight_cell_line, "final" = (RNA_weight_cell_line$value.x*RNA_weight_cell_line$value.y))
+colnames(RNA_weight_cell_line) <- c("feature","sample","view","RNA_raw","RNA_MOFA","Final")
+
+nodes_cellline_weight <- dcast(RNA_weight_cell_line, feature~sample, value.var = "Final")
+rownames(nodes_cellline_weight) <- nodes_cellline_weight$feature
+nodes_cellline_weight <- nodes_cellline_weight[,-1]
+```
+
+Then we can further select only nodes from the MAPK signaling pathway.
+
+```{r Select MAPK pathway nodes}
+## Select nodes from subnetwork EGF_EGFR_RAS_ERK_pathway
+
+interesting_nodes <- data.frame("name" = c("CCNA2","EGFR", "FOS", "HRAS",  "JUN", "MAP2K1", "MAP2K2", "MAPK1", "MAPK3", "MYC",  "NFKB1", "PCNA", "RAF1", "STAT3", "TGFB1", "THBS1", "VEGFA"))
+nodes_cellline_weight_filtered <- nodes_cellline_weight[rownames(nodes_cellline_weight) %in% interesting_nodes$name,]
+```
+
+And add the meta data information.
+
+```{r Add cell line meta data}
+RNA_metadata_cluster <- as.data.frame(read_csv(file = "data/metadata/RNA_metadata_cluster.csv"))
+tissue_origin_cluster <- as.data.frame(RNA_metadata_cluster[,c(2,3)]) #:2,8
+colnames(tissue_origin_cluster) <- c("cluster","Tissue") #", , "histology")
+rownames(tissue_origin_cluster) <- RNA_metadata_cluster[,1]
+tissue_origin_cluster$Tissue <- as.character(tissue_origin_cluster$Tissue)
+tissue_origin_cluster$cluster <- as.character(tissue_origin_cluster$cluster)
+```
+
+To visualize the results, heatmaps are shown.
+
+```{r Visualization transcriptomics}
+var1 <- rev(brewer.pal(9, "Set1"))
+names(var1) <- unique(tissue_origin_cluster$Tissue)
+var2 <- c("red","cyan","orange")
+names(var2) <- unique(tissue_origin_cluster$cluster)[order(unique(tissue_origin_cluster$cluster))]
+anno_colors <- list(Tissue=var1,
+                    cluster=var2)
+
+pheatmap(nodes_cellline_weight, 
+         display_numbers = F, 
+         cluster_rows = F, 
+         show_rownames =  F, 
+         annotation_col = tissue_origin_cluster, 
+         annotation_colors =  anno_colors)
+
+pheatmap(nodes_cellline_weight_filtered, 
+         display_numbers = F,
+         annotation_col = tissue_origin_cluster, 
+         annotation_colors =  anno_colors)
+```
+
+Since, we are also interested in comparing the two cell lines with the most differing features, we use the MOFA factor values to determine these by calculating the highest difference.
+
+```{r Identify distance between cell lines}
+# Calculate activity scores of most different cell lines
+
+## Get cell line factor weights
+factor_weights <- as.data.frame(get_factors(model,factors = 4))
+factor_weights$sample <- rownames(factor_weights)
+factor_weights <- merge(factor_weights,meta_data,by="sample")
+
+## Identify cell lines with highest difference in factor values
+diff_matrix <- data.frame()
+for(x in c(1:58)) {
+  for(y in c(1:58)) {
+    diff_matrix[x,y] <- abs(factor_weights$Factor4[x]-factor_weights$Factor4[y])
+  }
+}
+rownames(diff_matrix) <- factor_weights$sample
+colnames(diff_matrix) <- factor_weights$sample
+
+max(diff_matrix) #sample 28 and 44 = MOLT-4 & SF-539
+max_cell_lines <- rownames(diff_matrix)[which(diff_matrix == max(diff_matrix), arr.ind = T)][c(1,2)]
+
+plot_factor(model, 
+            factors = 4,
+            color_by = "cluster",
+            dot_size = 3,
+            dodge = T,           
+            legend = T,          
+            add_violin = T,     
+            violin_alpha = 0.25) + 
+  scale_color_manual(values=c("1"="red", "2"="cyan", "3"="orange")) +
+  scale_fill_manual(values=c("1"="red", "2"="cyan", "3"="orange")) + 
+  geom_label(label=model@samples_metadata$sample, show.legend = F, position=position_dodge(width=0.9))
+```
+
+Let's focus on the MAPK signaling pathway values for these cell lines.
+
+```{r Visualization transcriptomics most distant cell line}
+pheatmap(nodes_cellline_weight_filtered[,max_cell_lines], 
+         display_numbers = T,
+         annotation_col = tissue_origin_cluster, 
+         annotation_colors =  anno_colors,
+         cluster_cols = F)
+```
+
+
+## Use cell-line specific transcriptomics to infer biological activities
+
+Further, we can use the cell-line specific transcriptomic values to calculate cell-line specific activity scores with decoupleR and prior knowledge.
+
+```{r Calculate cell-line specific activity scores, eval=FALSE}
+## Calculate cell-line specific activity scores
+### LIANA, mOOn, Dorothea
+
+# Load LIANA (receptor and ligand) consensus network
+ligrec_ressource <- distinct(liana::decomplexify(liana::select_resource("Consensus")[[1]]))
+ligrec_geneset <- ligrec_ressource[,c("source_genesymbol","target_genesymbol")]
+ligrec_geneset$set <- paste(ligrec_geneset$source_genesymbol, ligrec_geneset$target_genesymbol, sep = "___")
+ligrec_geneset <- reshape2::melt(ligrec_geneset, id.vars = "set")[,c(3,1)]
+names(ligrec_geneset)[1] <- "gene"
+ligrec_geneset$mor <- 1
+ligrec_geneset$likelihood <- 1
+ligrec_geneset <- distinct(ligrec_geneset)
+
+# Load Dorothea (TF) network
+dorothea_df <- decoupleR::get_dorothea()
+
+# Load meta footprint analysis (moon) regulatory network 
+moon_regulons <- moon::build_moon_regulons()
+
+
+lig_rec_scores <- list()
+moon_scores <- list()
+dorothea_scores <- list()
+
+for(i in unique(RNA_weight_cell_line$sample)) {
+  RNA_sample <- RNA_weight_cell_line[RNA_weight_cell_line$sample == i,6]
+  names(RNA_sample) <- RNA_weight_cell_line[RNA_weight_cell_line$sample == i,1]
+  RNA_sample <- RNA_sample[!is.na(RNA_sample)]
+  
+  # Calculate regulatory activities from Receptor and Ligand network
+  ligrec_high_vs_low <- run_wmean(mat = as.matrix(RNA_sample), network = ligrec_geneset, times = 1000, .source = set, .target = gene, minsize = 2, seed = 42) 
+  ligrec_high_vs_low <- ligrec_high_vs_low[ligrec_high_vs_low$statistic == "norm_wmean",]
+  ligrec_high_vs_low_vector <- ligrec_high_vs_low$score
+  names(ligrec_high_vs_low_vector) <- ligrec_high_vs_low$source
+  
+  rec_inputs <- ligrec_high_vs_low_vector
+  names(rec_inputs) <- gsub(".+___","",names(rec_inputs))
+  rec_inputs <- tapply(rec_inputs, names(rec_inputs), mean)
+  receptors <- names(rec_inputs)
+  rec_inputs <- as.numeric(rec_inputs)
+  names(rec_inputs) <- receptors
+  
+  lig_rec_scores[[i]] <- rec_inputs
+  
+  lig_inputs <- ligrec_high_vs_low_vector
+  names(lig_inputs) <- gsub("___.+","",names(lig_inputs))
+  lig_inputs <- tapply(lig_inputs, names(lig_inputs), mean)
+  ligands <- names(lig_inputs)
+  lig_inputs <- as.numeric(lig_inputs)
+  names(lig_inputs) <- ligands
+  
+  lig_rec_scores[[i]] <- c(lig_rec_scores[[i]],lig_inputs)
+  
+  # Calculate regulatory activities from TF network
+  TF_high_vs_low <- run_wmean(mat = as.matrix(RNA_sample), network = dorothea_df, times = 1000, minsize = 10, seed = 42)
+  TF_high_vs_low <- TF_high_vs_low[TF_high_vs_low$statistic == "norm_wmean",]
+  TF_high_vs_low_vector <- TF_high_vs_low$score
+  names(TF_high_vs_low_vector) <- TF_high_vs_low$source
+  
+  dorothea_scores[[i]] <- TF_high_vs_low_vector 
+  
+  # Prepare moon analysis input
+  TF_high_vs_low <- as.data.frame(TF_high_vs_low[,c(2,4)])
+  row.names(TF_high_vs_low) <- TF_high_vs_low[,1]
+  
+  # Calculate TF regulatory activities from moon network
+  moon_high_vs_low <- run_wmean(mat = as.matrix(TF_high_vs_low[,-1,drop = F]), network = moon_regulons, times = 1000, minsize = 10, seed = 42)
+  moon_high_vs_low <- moon_high_vs_low[moon_high_vs_low$statistic == "norm_wmean",]
+  moon_high_vs_low_vector <- moon_high_vs_low$score
+  names(moon_high_vs_low_vector) <- moon_high_vs_low$source
+  moon_high_vs_low_vector <- moon_high_vs_low_vector[!(names(moon_high_vs_low_vector) %in% names(TF_high_vs_low_vector))] #exclude all found in TF activity estimation, only keep others to prevent overrepresentation
+
+  moon_scores[[i]] <- moon_high_vs_low_vector
+}
+```
+
+After that, we create a dataframe that includes the activity values for our nodes inside the MAPK signaling pathway.
+
+```{r Activity scores of MAPK pathway, eval=FALSE}
+## Filter interesting nodes 
+lig_rec_scores_df <- data.frame(t(data.table::rbindlist(
+  lapply(lig_rec_scores, function(x) data.table::data.table(t(x))),
+  fill = TRUE)))
+colnames(lig_rec_scores_df) <- names(lig_rec_scores)
+lig_rec_scores_filtered_df <- lig_rec_scores_df[rownames(lig_rec_scores_df) %in% interesting_nodes$name,]
+
+dorothea_scores_df <- data.frame(t(data.table::rbindlist(
+  lapply(dorothea_scores, function(x) data.table::data.table(t(x))),
+  fill = TRUE)))
+colnames(dorothea_scores_df) <- names(dorothea_scores)
+dorothea_scores_filtered_df <- dorothea_scores_df[rownames(dorothea_scores_df) %in% interesting_nodes$name,]
+
+moon_scores_df <- data.frame(t(data.table::rbindlist(
+  lapply(moon_scores, function(x) data.table::data.table(t(x))),
+  fill = TRUE)))
+colnames(moon_scores_df) <- names(moon_scores)
+moon_scores_filtered_df <- moon_scores_df[rownames(moon_scores_df) %in% interesting_nodes$name,]
+
+## Create dataframe with activity scores
+activity_scores <- rbind(lig_rec_scores_filtered_df,dorothea_scores_filtered_df[!(rownames(dorothea_scores_filtered_df) %in% c(rownames(moon_scores_filtered_df), rownames(lig_rec_scores_filtered_df)))], moon_scores_filtered_df[!(rownames(moon_scores_filtered_df) %in% c(rownames(dorothea_scores_filtered_df), rownames(lig_rec_scores_filtered_df))),])
+
+activity_scores[,1] <- rownames(activity_scores)
+write_csv(activity_scores, file = "data/mofa/activity_scores.csv")
+```
+
+We can visualize the different activity scores with heatmaps.
+
+```{r Visualize activity scores}
+## Visualize results
+activity_scores <- as.data.frame(read_csv(file = "data/mofa/activity_scores.csv"))
+rownames(activity_scores) <- activity_scores[,1]
+activity_scores <- activity_scores[,-1]
+
+pheatmap(activity_scores[,-1], 
+         display_numbers = F, 
+         cluster_rows = T, 
+         cluster_cols = T,
+         annotation_col = tissue_origin_cluster, 
+         annotation_colors =  anno_colors)
+
+pheatmap(activity_scores[,colnames(activity_scores) %in% max_cell_lines], 
+         display_numbers = T, 
+         cluster_rows = T, cluster_cols = F,
+         annotation_col = tissue_origin_cluster, 
+         annotation_colors =  anno_colors)
+
+```
+
+Since we would like to see relative differences between our cell lines, we calculate the relative activity values here through scaling ($\frac{feature_{single} - mean(feature)}{sd(feature)}$).
+
+```{r Relative cell-line specific activities}
+## Transform activity values to relative ones
+SDs <- apply(activity_scores,1,function(x){sd(x,na.rm = T)})
+means <- rowMeans(activity_scores, na.rm = T)
+activity_scores_scaled <- (activity_scores - means) / SDs
+```
+
+Let's visualize the scaled activity scores.
+
+```{r Visualization of relative activities}
+## Visualize results
+pheatmap(activity_scores_scaled, 
+         display_numbers = F, 
+         cluster_rows = T, 
+         cluster_cols = T,
+         annotation_col = tissue_origin_cluster, 
+         annotation_colors =  anno_colors)
+
+pheatmap(activity_scores_scaled[,colnames(activity_scores_scaled) %in% max_cell_lines], 
+         display_numbers = T, 
+         cluster_rows = T, 
+         cluster_cols = F,
+         annotation_col = tissue_origin_cluster, 
+         annotation_colors =  anno_colors)
+
+```
+
+
+## Visualize results of cell-line specific values with CytoScape
+
+Finally, we can add the activity scores to our network in CytoScape allowing us to visualize all results nicely.
+
+```{r CytoScape, eval=FALSE}
+## Add weighted, transformed activity scores to network
+combined_SIF_reduced <- read_csv(file = "results/cosmos/SIF_mofamoon_combined_reduced.csv")
+combined_ATT_reduced <- read_csv(file = "results/cosmos/ATT_mofamoon_combined_reduced.csv")
+
+activity_scores_scaled <- cbind("id"=rownames(activity_scores_scaled),activity_scores_scaled)
+
+style.name <- "dataStyle_activity"
+createVisualStyle(style.name)
+
+activity_weights <- data.frame()
+cosmos_weights <- data.frame()
+
+for(i in max_cell_lines) {
+  
+  nodes <- data.frame(id = combined_ATT_reduced$Nodes, 
+                      NodeType = as.integer(combined_ATT_reduced$NodeType), 
+                      mofa_weights = as.numeric(combined_ATT_reduced$mofa_weights), 
+                      Activity = combined_ATT_reduced$Activity, 
+                      stringsAsFactors = F)
+  
+  nodes <- merge(nodes, activity_scores_scaled[,c("id",i)], by = "id", all = T)
+  
+  colnames(nodes) <- c("id","NodeType","mofa_weights","Activity","Activity_Scores")
+  
+  nodes$Activity_Scores[is.na(nodes$Activity_Scores)] <- 0
+  nodes$mofa_weights[is.na(nodes$mofa_weights)] <- 0
+    
+  edges <- data.frame(source=combined_SIF_reduced$Node1, target = combined_SIF_reduced$Node2, sign = combined_SIF_reduced$Sign, weight = combined_SIF_reduced$Weight,stringsAsFactors = F)
+  
+  ##https://www.genome.jp/entry/N00001
+  EGF_EGFR_RAS_ERK_pathway_extended <- c("EGF", "EGFR", "GRB2", "SOS1", "SOS2", "HRAS", "KRAS", "NRAS", "ARAF", "BRAF", "RAF1", "MAP2K1", "MAP2K2", "MAPK1", "MAPK3", "CCND1", "CREBBP", "MYC", "SRF", "FOS")
+  
+  edges_MAPK_reduced_selected <- edges[edges$target %in% EGF_EGFR_RAS_ERK_pathway_extended & edges$source %in% EGF_EGFR_RAS_ERK_pathway_extended,]
+  
+  edges_MAPK_reduced_selected_start_end <- rbind(edges_MAPK_reduced_selected, edges[edges$target %in% "EGFR",],edges[edges$source %in% c("FOS","MYC"),])
+  
+  nodes_MAPK_reduced_selected_start_end <- nodes[nodes$id %in% edges_MAPK_reduced_selected_start_end$source | nodes$id %in% edges_MAPK_reduced_selected_start_end$target,]
+  
+  createNetworkFromDataFrames(nodes_MAPK_reduced_selected_start_end,edges_MAPK_reduced_selected_start_end,title = paste0(i, "_EGF_EGFR_RAS_ERK_pathway_start_end"), table.key.column = "name", collection = "Sub-Network per cell line")
+  setVisualStyle(style.name, network = paste0(i, "_EGF_EGFR_RAS_ERK_pathway_start_end"))
+  
+  selectNodes(list("ABL1", "CDK1", "KITLG", "PTK2B", "PTPN6", "RARA", "RELA", "JUNB", "EGR1", "FYN", "HBEGF", "ITGB1", "JUNB", "TP53", "SRC", "CCNE1", "GNAI2", "UBE2D1", "PTPRG"), by.col = "name", network = paste0(i, "_EGF_EGFR_RAS_ERK_pathway_start_end"))
+  deleteSelectedNodes(network = paste0(i, "_EGF_EGFR_RAS_ERK_pathway_start_end"))
+  
+  setEdgeTargetArrowShapeMapping(table.column = "sign",table.column.values =  list("-1","1"), shapes = list("T","ARROW"), style.name = style.name, network = paste0(i, "_EGF_EGFR_RAS_ERK_pathway_start_end"))
+  setEdgeLineWidthDefault(2, style.name)
+  
+  duplicated_edges <- as.data.frame(getTableColumns('edge','sign', network = paste0(i, "_EGF_EGFR_RAS_ERK_pathway_start_end")))
+  duplicated_edges[,2] <- rownames(duplicated_edges)
+  duplicated_edges <- duplicated_edges[is.na(duplicated_edges$sign),2]
+  selectEdges(duplicated_edges, network = paste0(i, "_EGF_EGFR_RAS_ERK_pathway_start_end"))
+  deleteSelectedEdges(network = paste0(i, "_EGF_EGFR_RAS_ERK_pathway_start_end"))
+
+  activity_weights = rbind(activity_weights,getTableColumns('node','Activity_Scores', network = paste0(i, "_EGF_EGFR_RAS_ERK_pathway_start_end")))
+  cosmos_weights = rbind(cosmos_weights,getTableColumns('node','Activity', network = paste0(i, "_EGF_EGFR_RAS_ERK_pathway_start_end")))
+}  
+
+setNodeShapeDefault("ROUND_RECTANGLE", style.name) #remember to specify your style.name!
+setNodeShapeMapping(table.column = "NodeType", table.column.values = list("1","2","3"),shapes = list("Octagon","VEE","Triangle"), style.name = style.name, network = paste0(i, "_EGF_EGFR_RAS_ERK_pathway_start_end"))
+setNodeColorDefault("#89D0F5", style.name)
+setNodeLabelMapping("name", style.name, network = paste0(i, "_EGF_EGFR_RAS_ERK_pathway_start_end"))
+setNodeHeightDefault(35,style.name)
+setNodeFontSizeDefault(12,style.name)
+setNodeWidthDefault(75,style.name)
+setNodeBorderWidthDefault(12, style.name = style.name)
+
+activity_weights_min = min(activity_weights[,1],na.rm=TRUE)
+activity_weights_max = max(activity_weights[,1],na.rm=TRUE)
+activity_weights.values = c(activity_weights_min,0,activity_weights_max)
+border.colors <- c(rev(brewer.pal(length(activity_weights.values), "RdBu")))
+setNodeBorderColorMapping('Activity_Scores', activity_weights.values, border.colors, style.name = style.name, network = paste0(i, "_EGF_EGFR_RAS_ERK_pathway_start_end"))
+
+cosmos_weights_min = min(cosmos_weights[,1],na.rm=TRUE)
+cosmos_weights_max = max(cosmos_weights[,1],na.rm=TRUE)
+cosmos_data.values = c(cosmos_weights_min,0,cosmos_weights_max)
+node.colors <- c(rev(brewer.pal(length(cosmos_data.values), "RdBu")))
+setNodeColorMapping('Activity',cosmos_data.values, node.colors, style.name = style.name, network = paste0(i, "_EGF_EGFR_RAS_ERK_pathway_start_end"))
+```
+
+```{r, eval=FALSE}
+for (cell_line in max_cell_lines) {
+  exportImage(filename = paste0("results/cytoscape/subnetwork_",cell_line,"_analysis.pdf"), type = "PDF", resolution = 900, network = paste0(cell_line, "_EGF_EGFR_RAS_ERK_pathway_start_end"))
+}
+
+saveSession(filename = "results/cytoscape/cell_line_specific_cosmos_network_analysis.cys")
+
+```
+
+## Session info
+
+```{r Session info}
+sessionInfo()
+```

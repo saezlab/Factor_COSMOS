@@ -2,13 +2,13 @@
 
 library(readr)
 library(ggfortify)
-library(dorothea)
 library(decoupleR)
 library(factoextra)
 library(GSEABase)
 library(readxl)
 library(tibble)
 library(proxy)
+library(data.table)
 
 # Load transcriptomics
 RNA <- as.data.frame(read_csv("data/RNA/RNA_log2_FPKM_clean.csv"))
@@ -28,7 +28,7 @@ RNA_metadata <- read_csv(file = "data/metadata/RNA_metadata.csv")
 
 # TF clustering with normalized weighted mean approach (dorothea + decoupleR)
 ## First load ressource
-dorothea_df <- get_dorothea(levels = c("A","B","C"))
+dorothea_df <- decoupleR::get_dorothea(levels = c("A","B","C"))
 
 ## Calculate TF activities per cell line
 TF_activity <- apply(RNA,2,function(x){
@@ -205,7 +205,6 @@ write_csv(RNA_metadata_cluster[[3]], file = "data/metadata/RNA_metadata_cluster.
 # Justify reduction of genes -----
 library(readr)
 library(ggfortify)
-library(dorothea)
 library(decoupleR)
 library(factoextra)
 library(GSEABase)
@@ -222,7 +221,7 @@ RNA <- RNA[rowSums(is.na(RNA))<(dim(RNA)[2]/3),]
 
 # TF clustering with normalized weighted mean approach (dorothea + decoupleR)
 ## First load ressource
-dorothea_df <- get_dorothea(levels = c("A","B","C"))
+dorothea_df <- decoupleR::get_dorothea(levels = c("A","B","C"))
 
 # Extract number of TFs and mean number of targets per TF depending on gene data set size
 results_table <- list()
