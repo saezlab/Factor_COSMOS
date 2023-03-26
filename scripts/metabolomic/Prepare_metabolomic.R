@@ -3,6 +3,7 @@ library(tidyr)
 library(reshape2)
 library(pheatmap)
 library(vsn)
+library(rcompanion)
 
 # Metabolomic Data From Metabolon - data averaged from triplicate experiments (from https://wiki.nci.nih.gov/display/NCIDTPdata/Molecular+Target+Data)
 #metabs <- as.data.frame(read_csv("data/metabolomic/WEB_DATA_METABOLON.TXT")) 
@@ -42,20 +43,20 @@ metabs_df <- reshape2::dcast(metabs, formula = TITLE~cellname, value.var = "mean
 rownames(metabs_df) <- metabs_df[,1]
 metabs_df <- metabs_df[,-1]
 
-# Normalize dataframe using vsn with glog transformation
-fit <- vsnMatrix(as.matrix(metabs_df))
-# Visually verify whether there is a dependence of the standard deviation (or variance) on the mean --> desired: no variance-mean dependence = horizontal line.
-meanSdPlot(fit) 
-# If decent, apply vsn transformation to data
-metabs_df <- as.data.frame(vsn::predict(fit,as.matrix(metabs_df)))
-
-# Check violins again
-metabs_df_melted <- reshape2::melt(metabs_df)
-
-ggplot(metabs_df_melted, aes(x = variable, y = value)) + geom_violin() + 
-  theme(axis.title.x=element_blank(),
-        axis.text.x=element_blank(),
-        axis.ticks.x=element_blank())
+# # Normalize dataframe using vsn with glog transformation
+# fit <- vsnMatrix(as.matrix(metabs_df))
+# # Visually verify whether there is a dependence of the standard deviation (or variance) on the mean --> desired: no variance-mean dependence = horizontal line.
+# meanSdPlot(fit) 
+# # If decent, apply vsn transformation to data
+# metabs_df <- as.data.frame(vsn::predict(fit,as.matrix(metabs_df)))
+# 
+# # Check violins again
+# metabs_df_melted <- reshape2::melt(metabs_df)
+# 
+# ggplot(metabs_df_melted, aes(x = variable, y = value)) + geom_violin() + 
+#   theme(axis.title.x=element_blank(),
+#         axis.text.x=element_blank(),
+#         axis.ticks.x=element_blank())
 
 
 # Metabolites mapping to have consistent naming (https://hmdb.ca HMDB IDs)
@@ -70,10 +71,13 @@ write_csv(MetaboliteToHMDB, file = "data/metabolomic/MetaboliteToHMDB.csv")
 pheatmap(metabs_df[complete.cases(metabs_df),], show_colnames = T, show_rownames = F, cluster_rows = F) 
 
 # Save datasets
-metabs_df <- cbind("metabolite" = rownames(metabs_df), metabs_df)
-write_csv(metabs_df, file = "data/metabolomic/metabolomic_vsn.csv")
 
 metabs_df_clean <- metabs_df[complete.cases(metabs_df),]
 metabs_df_clean <- cbind("metabolite" = rownames(metabs_df_clean), metabs_df_clean)
 write_csv(metabs_df_clean, file = "data/metabolomic/metabolomic_clean_vsn.csv")
+
+metabs_df <- cbind("metabolite" = rownames(metabs_df), metabs_df)
+write_csv(metabs_df, file = "data/metabolomic/metabolomic_vsn.csv")
+
+
 

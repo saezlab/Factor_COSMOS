@@ -28,10 +28,10 @@ library(cosmosR)
 
 ## Calculate cell-line specific transcriptomics
 
-Firstly, we can calculate cell-line specific transcriptomic values by multiplying the MOFA factor weight (here: Factor 4) with the 'raw' transcriptomic values.
+Firstly, we can calculate cell-line specific transcriptomic values by multiplying the MOFA feature weights with the MOFA factor weights (here: Factor 4).
 
 ```{r Calculate cell-line specific transcriptomics}
-# RNA cell-line-specific values (RNA_specific = MOFA_factor_weight * RNA_raw)
+# RNA cell-line-specific values (RNA_specific = MOFA_feature_weight * MOFA_factor_weight)
 
 ## Get RNA raw values
 RNA_raw <- as.data.frame(read_csv("data/RNA/RNA_log2_FPKM_clean.csv"))
@@ -42,7 +42,7 @@ RNA_raw$view <- "RNA"
 RNA_raw <- RNA_raw[,c(2,1,4,3)]                 
 names(RNA_raw) <- c("sample","feature","view","value")
 
-## Get MOFA factor weights from Factor 4  
+## Get MOFA feature and factor weights from Factor 4  
 model <- load_model('results/mofa/mofa_res_10factor.hdf5')
 meta_data <- read_csv("data/metadata/RNA_metadata_cluster.csv")[,c(1,2)]
 colnames(meta_data) <- c("sample","cluster")
@@ -54,10 +54,16 @@ RNA_MOFA <- cbind(rownames(RNA_MOFA), RNA_MOFA)
 colnames(RNA_MOFA) <- c("feature", "value")
 RNA_MOFA$feature <- gsub("_RNA","",RNA_MOFA$feature)
 
+weights <- data.frame(get_factors(model, factors = "all")$single_group[,4])
+Factor_MOFA <- cbind(rownames(weights), weights)
+colnames(Factor_MOFA) <- c("sample", "value")
+
 ## Calculate score
 RNA_weight_cell_line <- merge(RNA_raw, RNA_MOFA, by.x='feature', by.y='feature')
-RNA_weight_cell_line <- cbind(RNA_weight_cell_line, "final" = (RNA_weight_cell_line$value.x*RNA_weight_cell_line$value.y))
-colnames(RNA_weight_cell_line) <- c("feature","sample","view","RNA_raw","RNA_MOFA","Final")
+RNA_weight_cell_line <- merge(RNA_weight_cell_line, Factor_MOFA, by.x='sample', by.y='sample')
+
+RNA_weight_cell_line <- cbind(RNA_weight_cell_line, "final" = (RNA_weight_cell_line$value.y * RNA_weight_cell_line$value))
+colnames(RNA_weight_cell_line) <- c("sample","feature","view","RNA_raw","RNA_MOFA","sample_MOFA","Final")
 
 nodes_cellline_weight <- dcast(RNA_weight_cell_line, feature~sample, value.var = "Final")
 rownames(nodes_cellline_weight) <- nodes_cellline_weight$feature
@@ -137,10 +143,16 @@ plot_factor(model,
             dodge = T,           
             legend = T,          
             add_violin = T,     
-            violin_alpha = 0.25) + 
+            violin_alpha = 0.25) +
   scale_color_manual(values=c("1"="red", "2"="cyan", "3"="orange")) +
   scale_fill_manual(values=c("1"="red", "2"="cyan", "3"="orange")) + 
-  geom_label(label=model@samples_metadata$sample, show.legend = F, position=position_dodge(width=0.9))
+  geom_label(label=c(ifelse(get_factors(model)$single_group[,4]==max(get_factors(model)$single_group[,4]) | get_factors(model)$single_group[,4]==min(get_factors(model)$single_group[,4]),model@samples_metadata$sample, NA)),
+                     show.legend = F, size = 3, position=position_dodge(width=0.9), family = "Times New Roman", label.size = 0.1) +
+  theme_bw() +
+  ylab("Weight") +
+  xlab("") +
+  theme(strip.text = element_text(family = "Times New Roman"), axis.text.x = element_blank(),axis.ticks.x = element_blank(),axis.title.y.right =element_text(colour = "red"),
+        axis.title.x = element_text(family = "Times New Roman"), axis.title.y = element_text(family = "Times New Roman"), axis.text = element_text(family = "Times New Roman"), legend.text = element_text(family = "Times New Roman"), legend.title = element_text(family = "Times New Roman"))
 ```
 
 Let's focus on the MAPK signaling pathway values for these cell lines.
@@ -184,8 +196,14 @@ moon_scores <- list()
 dorothea_scores <- list()
 
 for(i in unique(RNA_weight_cell_line$sample)) {
-  RNA_sample <- RNA_weight_cell_line[RNA_weight_cell_line$sample == i,6]
-  names(RNA_sample) <- RNA_weight_cell_line[RNA_weight_cell_line$sample == i,1]
+  RNA_sample <- RNA_weight_cell_line[RNA_weight_cell_line$sample == i,7]
+  names(RNA_sample) <- RNA_weight_cell_line[RNA_weight_cell_line$sample == i,2]
+  
+  # Don't use inferred values
+  features <- RNA_weight_cell_line[RNA_weight_cell_line$sample==i,"RNA_raw"]
+  names(features) <- RNA_weight_cell_line[RNA_weight_cell_line$sample==i,"feature"]
+  features <- features[!is.na(features)]
+  RNA_sample <- RNA_sample[names(features)]
   RNA_sample <- RNA_sample[!is.na(RNA_sample)]
   
   # Calculate regulatory activities from Receptor and Ligand network
@@ -238,6 +256,7 @@ for(i in unique(RNA_weight_cell_line$sample)) {
 After that, we create a dataframe that includes the activity values for our nodes inside the MAPK signaling pathway.
 
 ```{r Activity scores of MAPK pathway, eval=FALSE}
+
 ## Filter interesting nodes 
 lig_rec_scores_df <- data.frame(t(data.table::rbindlist(
   lapply(lig_rec_scores, function(x) data.table::data.table(t(x))),
@@ -258,10 +277,15 @@ colnames(moon_scores_df) <- names(moon_scores)
 moon_scores_filtered_df <- moon_scores_df[rownames(moon_scores_df) %in% interesting_nodes$name,]
 
 ## Create dataframe with activity scores
-activity_scores <- rbind(lig_rec_scores_filtered_df,dorothea_scores_filtered_df[!(rownames(dorothea_scores_filtered_df) %in% c(rownames(moon_scores_filtered_df), rownames(lig_rec_scores_filtered_df)))], moon_scores_filtered_df[!(rownames(moon_scores_filtered_df) %in% c(rownames(dorothea_scores_filtered_df), rownames(lig_rec_scores_filtered_df))),])
+activity_scores <- rbind(lig_rec_scores_filtered_df,dorothea_scores_filtered_df[!(rownames(dorothea_scores_filtered_df) %in%  rownames(lig_rec_scores_filtered_df)),], moon_scores_filtered_df[!(rownames(moon_scores_filtered_df) %in% c(rownames(dorothea_scores_filtered_df), rownames(lig_rec_scores_filtered_df))),])
 
-activity_scores[,1] <- rownames(activity_scores)
+all_activity_scores <- rbind(lig_rec_scores_df,dorothea_scores_df[!(rownames(dorothea_scores_df) %in% rownames(lig_rec_scores_df)),], moon_scores_df[!(rownames(moon_scores_df) %in% c(rownames(dorothea_scores_df), rownames(lig_rec_scores_df))),])
+
+activity_scores <- cbind(rownames(activity_scores),activity_scores)
 write_csv(activity_scores, file = "data/mofa/activity_scores.csv")
+
+all_activity_scores <- cbind(rownames(all_activity_scores),all_activity_scores)
+write_csv(all_activity_scores, file = "data/mofa/all_activity_scores.csv")
 ```
 
 We can visualize the different activity scores with heatmaps.
@@ -272,7 +296,11 @@ activity_scores <- as.data.frame(read_csv(file = "data/mofa/activity_scores.csv"
 rownames(activity_scores) <- activity_scores[,1]
 activity_scores <- activity_scores[,-1]
 
-pheatmap(activity_scores[,-1], 
+all_activity_scores <- as.data.frame(read_csv(file = "data/mofa/all_activity_scores.csv"))
+rownames(all_activity_scores) <- all_activity_scores[,1]
+all_activity_scores <- all_activity_scores[,-1]
+
+pheatmap(activity_scores, 
          display_numbers = F, 
          cluster_rows = T, 
          cluster_cols = T,
@@ -294,6 +322,10 @@ Since we would like to see relative differences between our cell lines, we calcu
 SDs <- apply(activity_scores,1,function(x){sd(x,na.rm = T)})
 means <- rowMeans(activity_scores, na.rm = T)
 activity_scores_scaled <- (activity_scores - means) / SDs
+
+SDs <- apply(all_activity_scores,1,function(x){sd(x,na.rm = T)})
+means <- rowMeans(all_activity_scores, na.rm = T)
+all_activity_scores_scaled <- (all_activity_scores - means) / SDs
 ```
 
 Let's visualize the scaled activity scores.
@@ -313,6 +345,19 @@ pheatmap(activity_scores_scaled[,colnames(activity_scores_scaled) %in% max_cell_
          cluster_cols = F,
          annotation_col = tissue_origin_cluster, 
          annotation_colors =  anno_colors)
+
+pheatmap(all_activity_scores_scaled[,rownames(tissue_origin_cluster)[order(tissue_origin_cluster$cluster)][rownames(tissue_origin_cluster)[order(tissue_origin_cluster$cluster)] %in% colnames(all_activity_scores_scaled)]], 
+         display_numbers = F, 
+         cluster_rows = T, 
+         cluster_cols = F,
+         show_colnames = F,
+         show_rownames = F,
+         annotation_col = tissue_origin_cluster, 
+         annotation_colors =  anno_colors,
+         fontfamily = "Times New Roman",
+         fontsize = 10,
+         color = colorRampPalette(c("blue","white","red"))(100),
+         breaks = seq(-5,5,0.1))
 
 ```
 
@@ -380,11 +425,12 @@ for(i in max_cell_lines) {
 }  
 
 setNodeShapeDefault("ROUND_RECTANGLE", style.name) #remember to specify your style.name!
-setNodeShapeMapping(table.column = "NodeType", table.column.values = list("1","2","3"),shapes = list("Octagon","VEE","Triangle"), style.name = style.name, network = paste0(i, "_EGF_EGFR_RAS_ERK_pathway_start_end"))
+setNodeShapeMapping(table.column = "NodeType", table.column.values = list("1","2","3","4","5"),shapes = list("Octagon","VEE","Triangle","Diamond","Ellipse"), style.name = style.name, network = paste0(i, "_EGF_EGFR_RAS_ERK_pathway_start_end"))
 setNodeColorDefault("#89D0F5", style.name)
 setNodeLabelMapping("name", style.name, network = paste0(i, "_EGF_EGFR_RAS_ERK_pathway_start_end"))
 setNodeHeightDefault(35,style.name)
 setNodeFontSizeDefault(12,style.name)
+setNodeFontFaceDefault("TimesNewRomanPSMT",style.name)
 setNodeWidthDefault(75,style.name)
 setNodeBorderWidthDefault(12, style.name = style.name)
 

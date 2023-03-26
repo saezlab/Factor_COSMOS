@@ -74,11 +74,12 @@ selectEdges(duplicated_edges, network = "Full COSMOS network")
 deleteSelectedEdges(network = "Full COSMOS network")
 
 setNodeShapeDefault("ROUND_RECTANGLE", style.name) #remember to specify your style.name!
-setNodeShapeMapping(table.column = "NodeType", table.column.values = list("1","2","3"),shapes = list("Octagon","VEE","Triangle"), style.name = style.name, network = "Full COSMOS network")
+setNodeShapeMapping(table.column = "NodeType", table.column.values = list("1","2","3","4","5"),shapes = list("Octagon","VEE","Triangle","Diamond","Ellipse"), style.name = style.name, network = "Full COSMOS network")
 setNodeColorDefault("#89D0F5", style.name)
 setNodeLabelMapping("name", style.name, network = "Full COSMOS network")
 setNodeHeightDefault(35,style.name)
 setNodeFontSizeDefault(12,style.name)
+setNodeFontFaceDefault("TimesNewRomanPSMT",style.name)
 setNodeWidthDefault(75,style.name)
 setNodeBorderWidthDefault(12, style.name = style.name)
 
@@ -135,11 +136,12 @@ for (gene in c("MYC", "HRAS")) {
   deleteSelectedEdges(network = paste("Sub-network",gene))
   
   setNodeShapeDefault("ROUND_RECTANGLE", style.name) #remember to specify your style.name!
-  setNodeShapeMapping(table.column = "NodeType", table.column.values = list("1","2","3"),shapes = list("Octagon","VEE","Triangle"), style.name = style.name, network = paste("Sub-network",gene))
+  setNodeShapeMapping(table.column = "NodeType", table.column.values = list("1","2","3","4","5"),shapes = list("Octagon","VEE","Triangle","Diamond","Ellipse"), style.name = style.name, network = paste("Sub-network",gene))
   setNodeColorDefault("#89D0F5", style.name)
   setNodeLabelMapping("name", style.name, network = paste("Sub-network",gene))
   setNodeHeightDefault(35,style.name)
   setNodeFontSizeDefault(12,style.name)
+  setNodeFontFaceDefault("TimesNewRomanPSMT",style.name)
   setNodeWidthDefault(75,style.name)
   setNodeBorderWidthDefault(12, style.name = style.name)
   
@@ -183,11 +185,12 @@ selectEdges(duplicated_edges, network = "EGF_EGFR_RAS_ERK_pathway_start_end")
 deleteSelectedEdges(network = "EGF_EGFR_RAS_ERK_pathway_start_end")
 
 setNodeShapeDefault("ROUND_RECTANGLE", style.name) #remember to specify your style.name!
-setNodeShapeMapping(table.column = "NodeType", table.column.values = list("1","2","3"),shapes = list("Octagon","VEE","Triangle"), style.name = style.name, network = "EGF_EGFR_RAS_ERK_pathway_start_end")
+setNodeShapeMapping(table.column = "NodeType", table.column.values = list("1","2","3","4","5"),shapes = list("Octagon","VEE","Triangle","Diamond","Ellipse"), style.name = style.name, network = "EGF_EGFR_RAS_ERK_pathway_start_end")
 setNodeColorDefault("#89D0F5", style.name)
 setNodeLabelMapping("name", style.name, network = "EGF_EGFR_RAS_ERK_pathway_start_end")
 setNodeHeightDefault(35,style.name)
 setNodeFontSizeDefault(12,style.name)
+setNodeFontFaceDefault("TimesNewRomanPSMT", style.name)
 setNodeWidthDefault(75,style.name)
 setNodeBorderWidthDefault(12, style.name = style.name)
 

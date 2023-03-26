@@ -1,4 +1,4 @@
 Nodes,NodeType,ZeroAct,UpAct,DownAct,AvgAct,measured,Activity,sign_activity,mofa_weights
 APP,2,0,1,0,1,1,1,1,2.2538359851577954
 NOTCH2,3,0,1,0,1,1,1,1,2.160784246933112
-RBPJ,1,0,1,0,1,1,1,1,3.9698492961016343
+RBPJ,4,0,1,0,1,1,1,1,3.9698492961016343

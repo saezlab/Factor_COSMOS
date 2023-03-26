@@ -1,3 +1,3 @@
 Nodes,NodeType,ZeroAct,UpAct,DownAct,AvgAct,measured,Activity,sign_activity,mofa_weights
-ID2,0,0,0,1,-1,0,-1,-1,NA
-TCF12,1,0,1,0,1,1,1,1,5.156408766618424
+ID2,5,0,0,1,-1,0,-1,-1,NA
+TCF12,4,0,1,0,1,1,1,1,5.156408766618424

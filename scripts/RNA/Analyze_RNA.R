@@ -1,5 +1,3 @@
-# Identify number of cell line clusters -----
-
 library(readr)
 library(ggfortify)
 library(decoupleR)
@@ -9,6 +7,9 @@ library(readxl)
 library(tibble)
 library(proxy)
 library(data.table)
+library(extrafont)
+
+# Identify number of cell line clusters -----
 
 # Load transcriptomics
 RNA <- as.data.frame(read_csv("data/RNA/RNA_log2_FPKM_clean.csv"))
@@ -71,11 +72,14 @@ pheatmap(TF_activity_scaledrank_df_corr)
 ## Determine optimal number of clusters
 df <- as.data.frame(t(TF_activity_scaledrank_df))
 ### Silhouette method
-fviz_nbclust(df, kmeans, method = "silhouette", k.max = 30)+
-  labs(subtitle = "Silhouette method") +
+fviz_nbclust(df, kmeans, method = "silhouette", k.max = 10)+
+  labs(title="") +
   geom_vline(xintercept = 4, linetype = 2) +
-  geom_vline(xintercept = 6, linetype = 2) +
-  geom_vline(xintercept = 9, linetype = 2)
+  theme_bw() + 
+  theme(axis.title.x = element_text(family = "Times New Roman"), 
+        axis.title.y = element_text(family = "Times New Roman"), 
+        axis.text = element_text(family = "Times New Roman"))
+
 ### Elbow method
 fviz_nbclust(df, kmeans, method = "wss", k.max = 30) +
   geom_vline(xintercept = 3, linetype = 2) +
@@ -83,9 +87,10 @@ fviz_nbclust(df, kmeans, method = "wss", k.max = 30) +
   geom_vline(xintercept = 6, linetype = 2) +
   geom_vline(xintercept = 9, linetype = 2)
 
-## --> Optimal number of clusters based on Silhouette is 3 and with the Elbow method no optimal number of clusters can be identified 
+## --> Optimal number of clusters based on Silhouette is 4 and with the Elbow method no optimal number of clusters can be identified 
 
 ## Perform k-mean clustering and assign cell lines to clusters (here: explore different numbers based on peaks in Silhouette plot)
+RNA_kmeans <- list()
 SD <- list()
 clusters_df <- list()
 heatmap_avgrank_reduced <- list()
@@ -102,19 +107,61 @@ for(i in c(3,4,6,9)) {
   
   #Set seed so assignment to clusters is consistent across multiple runs
   set.seed(12) 
-  RNA_kmeans <- kmeans(df, i, iter.max = 10000, nstart = 100)
-  
-  ## Inspect clustering
-  pc_plot[[i]] <- autoplot(prcomp(t(TF_activity_scaled_df[complete.cases(TF_activity_scaled_df),])), data = t(TF_activity_scaled_df), colour = RNA_kmeans$cluster)     
-  
-  ## Size of clusters (amount of cell lines per cluster)
-  table(RNA_kmeans$cluster)
+  RNA_kmeans[[i]] <- kmeans(df, i, iter.max = 10000, nstart = 100)
   
   ## Extract clusters
-  clusters <- data.frame("cluster" = RNA_kmeans$cluster)
+  clusters <- data.frame("cluster" = RNA_kmeans[[i]]$cluster)
+  
+  ## Inspect clustering
+  RNA_kmeans[[i]]$cluster <- data.frame("Cell_line"=names(RNA_kmeans[[i]]$cluster),
+                                        "Cluster"=as.character(RNA_kmeans[[i]]$cluster))
+  
+  pc_plot[[i]] <- autoplot(prcomp(t(TF_activity_scaled_df[complete.cases(TF_activity_scaled_df),])), 
+           data = RNA_kmeans[[i]]$cluster,
+           colour = "Cluster") +
+    theme_bw() +
+    scale_color_manual(values=c("1"="red", "2"="cyan", "3"="orange")) +
+    scale_fill_manual(values=c("1"="red", "2"="cyan", "3"="orange")) + 
+    theme(axis.title.x = element_text(family = "Times New Roman"), 
+          axis.title.y = element_text(family = "Times New Roman"), 
+          axis.text = element_text(family = "Times New Roman"), 
+          legend.text = element_text(family = "Times New Roman"), 
+          legend.title = element_text(family = "Times New Roman"))
+  
+  ## Size of clusters (amount of cell lines per cluster)
+  table(RNA_kmeans[[i]]$cluster)
+  table(clusters)
   
   ## Cell line TF activity with cluster assignment
-  heatmap_cluster[[i]] <- pheatmap(TF_activity_scaled_df[,order(clusters$cluster)], annotation_col = clusters, cluster_cols = F, width = 15, height = 30, show_rownames = T, show_colnames = T)
+  anno_colors <- list(
+    "Cluster"=c("1"="red", "2"="cyan", "3"="orange")
+  )
+  anno_col <- data.frame("Cluster"=as.character(RNA_kmeans[[i]]$cluster$Cluster), 
+                         row.names = RNA_kmeans[[i]]$cluster$Cell_line)
+  
+  heatmap_cluster[[i]] <- pheatmap(TF_activity_scaled_df[,order(RNA_kmeans[[i]]$cluster$Cluster)], 
+                                   annotation_col = anno_col, 
+                                   annotation_colors = anno_colors,
+                                   cluster_cols = F, 
+                                   show_rownames = F, 
+                                   show_colnames = F,
+                                   fontfamily = "Times New Roman",
+                                   fontsize = 12, 
+                                   color = colorRampPalette(rev(brewer.pal(n = 7, name = "RdBu")))(100),
+                                   breaks = seq(-4,4,8/100))
+  
+  ## Compare average of TF values per cluster
+  compare_means(value ~ Cluster,
+                merge(cbind(pivot_longer(TF_activity_scaled_df,
+                                         cols = colnames(TF_activity_scaled_df),
+                                         names_to = "sample",
+                                         values_to = "value"), 
+                            "feature"=rep(rownames(TF_activity_scaled_df),60)), 
+                      RNA_kmeans[[i]]$cluster, by.x = "sample", by.y = "Cell_line"),
+                method="t.test",
+                p.adjust.method = "BH",
+                paired = F,
+                alternative = "two.sided")
   
   ## Compare to cell line metadata
   clusters_df[[i]] <- cbind("cell_line"=rownames(clusters),clusters)
@@ -146,7 +193,26 @@ for(i in c(3,4,6,9)) {
   
   ## Inspect results
   heatmap_avgrank_reduced[[i]] <- pheatmap(TF_activity_cluster_avgrank_reduced[[i]], cluster_rows = F, cluster_cols = F, display_numbers = T)
-  heatmap_avgNES_reduced[[i]] <- pheatmap(TF_activity_cluster_avgNES_reduced[[i]], cluster_rows = F, cluster_cols = F, display_numbers = T)
+  
+  colnames(TF_activity_cluster_avgNES_reduced[[i]]) <- c("Cluster 1","Cluster 2","Cluster 3")
+  heatmap_avgNES_reduced[[i]] <- pheatmap(TF_activity_cluster_avgNES_reduced[[i]], 
+                                          cluster_rows = T, 
+                                          cluster_cols = F, 
+                                          display_numbers = F,
+                                          fontfamily = "Times New Roman",
+                                          fontsize = 12,
+                                          angle_col = 0,
+                                          color = colorRampPalette(rev(brewer.pal(n = 7, name = "RdBu")))(100))
+  
+  compare_means(value ~ Cluster,
+                pivot_longer(TF_activity_cluster_avgNES_reduced[[i]],
+                             cols=colnames(TF_activity_cluster_avgNES_reduced[[i]]),
+                             values_to = "value", 
+                             names_to = "Cluster"),
+                method="t.test",
+                p.adjust.method = "BH",
+                paired = F,
+                alternative = "two.sided")
 }
 
 # Print number of samples per cluster
@@ -261,8 +327,8 @@ for(i in c(1:dim(RNA)[1])){
   print(i)
 }
 
-save(results_table,file = "results/RNA/TF_TFtarget_gene_reduction.Rdata")
-#load(file = "results/RNA/TF_TFtarget_gene_reduction.Rdata")
+#save(results_table,file = "results/RNA/TF_TFtarget_gene_reduction.Rdata")
+load(file = "results/RNA/TF_TFtarget_gene_reduction.Rdata")
 
 ## From list to data frame
 results_table_df <- data.frame()
@@ -270,18 +336,24 @@ for (i in c(1:length(results_table))) {
   results_table_df <- rbind(results_table_df, results_table[[i]])
 }
 ## Plot result with two y axis (function of TF targets and TFs depending on number of genes)
+
 plot <- ggplot(results_table_df, aes(Number_of_genes,Number_of_TFs)) +
   geom_point(color = "blue", size = 0.1) +
   geom_line(aes(color = "Number of TFs")) +
-  geom_line(aes(y=mean+sd, color = "Standard deviation of TF targets")) +
+  geom_line(aes(y=mean+sd, color = "SD of TF targets per TF")) +
   geom_point(aes(y = mean, color = "red"), size = 0.1) +
-  geom_line(aes(y = mean, color = "Mean number of TF targets")) +
-  scale_y_continuous("Number of TFs", breaks = seq(0,230,10), sec.axis = sec_axis(~ ., name = "Mean TF targets", breaks = seq(0,230,10))) +
+  geom_line(aes(y = mean, color = "Average TF targets per TF")) +
+  scale_y_continuous("Number of TFs", breaks = seq(0,230,10), sec.axis = sec_axis(~ ., name = "Average TF targets per TF", breaks = seq(0,230,10))) +
   scale_x_reverse("Number of genes") +
-  scale_color_manual(name = "", values = c("Number of TFs" = "blue", "Mean number of TF targets" = "red", "Standard deviation of TF targets" = "#FFCCCB")) +
+  scale_color_manual(name = "", values = c("Number of TFs" = "blue", "Average TF targets per TF" = "red", "SD of TF targets per TF" = "#FFCCCB")) +
   ggtitle("Number of identified transcription factors and targets (mean) depending on number of genes") +
   theme_bw() +
-  theme(axis.title.y.left =element_text(colour = "blue"),axis.title.y.right =element_text(colour = "red"))
+  theme(axis.title.y.left =element_text(colour = "blue"),axis.title.y.right =element_text(colour = "red"),
+        axis.title.x = element_text(family = "Times New Roman"), 
+        axis.title.y = element_text(family = "Times New Roman"), 
+        axis.text = element_text(family = "Times New Roman"), 
+        legend.text = element_text(family = "Times New Roman"), 
+        legend.title = element_text(family = "Times New Roman"))
 
 ggsave(file="results/RNA/TF_TFtarget_gene_reduction.pdf", device = "pdf", plot = plot, width = 25, height = 20)
 

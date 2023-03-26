@@ -67,7 +67,7 @@ moon_scores_native <- list()
 dorothea_scores_native <- list()
 cosmos_input <- list()
 
-for(i in c("SF-539", "MOLT-4")) { 
+for(i in c("NCI-H226","SF-539", "MOLT-4")) { 
   RNA_sample_native <- RNA[,i]
   names(RNA_sample_native) <- rownames(RNA)
   RNA_sample_native <- RNA_sample_native[!is.na(RNA_sample_native)]
@@ -133,7 +133,7 @@ save(cosmos_input, file = "data/cosmos/native/cosmos_input.RData")
 # load("data/cosmos/native/cosmos_input.RData")
 
 
-for (cell_line in c("SF-539", "MOLT-4")) {
+for (cell_line in c("NCI-H226", "SF-539", "MOLT-4")) {
 
   RNA <- cosmos_input[[cell_line]]$RNA
   metab <- cosmos_input[[cell_line]]$metab
@@ -259,7 +259,7 @@ for (cell_line in c("SF-539", "MOLT-4")) {
                                                       CARNIVAL_options = my_options)
   
   save(run_TF_to_lig, file = paste0("results/cosmos/native/run_TF_to_lig_",cell_line,".Rdata"))
-  
+
   # load(paste0("results/cosmos/native/run_TF_to_lig_",cell_line,".Rdata"))
   
   SIF_TF_to_lig <- as.data.frame(run_TF_to_lig$weightedSIF)
@@ -286,7 +286,7 @@ for (cell_line in c("SF-539", "MOLT-4")) {
                                   summarise(across(.fns= ~ mean(.x, na.rm = TRUE))))
   
   ## TF
-  TF_weights <- moon_scores_native
+  TF_weights <- dorothea_scores_native
   names(TF_weights) <- gsub("_TF","",names(TF_weights))
   TF_weights <- data.frame(Nodes = names(TF_weights), weights = TF_weights)
   
@@ -312,7 +312,7 @@ for (cell_line in c("SF-539", "MOLT-4")) {
   metab_weights <- data.frame(Nodes = names(metab), weights = metab)
   
   ## mOOn
-  moon_weights <- ligrec_TF_moon_inputs$moon
+  moon_weights <- moon_scores_native
   moon_weights <- moon_weights[!(names(moon_weights) %in% rec_weights$Nodes)]
   moon_weights <- data.frame(Nodes = names(moon_weights), weights = moon_weights)
   
@@ -334,7 +334,15 @@ for (cell_line in c("SF-539", "MOLT-4")) {
   
   ligrec_df <- ligrec_df[ligrec_df$Node1 %in% combined_ATT$Nodes & ligrec_df$Node2 %in% combined_ATT$Nodes, ]
   
-  combined_ATT$NodeType <- ifelse(combined_ATT$Nodes %in% ligrec_df$Node1, 2, ifelse(combined_ATT$Nodes %in% ligrec_df$Node2, 3, combined_ATT$NodeType)) #if node is a ligand set NodeType to 2, if node is a receptor set NodeType to 3, else keep 0 or 1
+  # Load Dorothea (TF) network
+  dorothea_df <- decoupleR::get_dorothea()
+  dorothea_df <- dorothea_df[dorothea_df$source %in% combined_ATT$Nodes,]
+  
+  # Load meta footprint analysis (moon) regulatory network 
+  moon_regulons <- moon::build_moon_regulons()
+  moon_regulons <- moon_regulons[moon_regulons$source %in% combined_ATT$Nodes,]
+  
+  combined_ATT$NodeType <- ifelse(combined_ATT$Nodes %in% ligrec_df$Node1, 2, ifelse(combined_ATT$Nodes %in% ligrec_df$Node2, 3, ifelse(combined_ATT$Nodes %in% dorothea_df$source, 4, ifelse(combined_ATT$Nodes %in% moon_regulons$source, 5, combined_ATT$NodeType)))) #if node is a ligand set NodeType to 2, if node is a receptor set NodeType to 3, if node is a TF set NodeType to 4, if node is a master regulator set NodeType to 5, else keep 0 or 1
   
   write_csv(combined_ATT, file = paste0("results/cosmos/native/ATT_mofamoon_combined_",cell_line,".csv"))
   
@@ -379,7 +387,7 @@ interesting_nodes <- data.frame("name" = c("CCNA2","EGFR", "FOS", "HRAS",  "JUN"
 style.name = "dataStyle_cosmos_native"
 createVisualStyle(style.name)
 
-for (cell_line in c("SF-539", "MOLT-4")) {
+for (cell_line in c("SF-539", "MOLT-4", "NCI-H226")) {
   
   load(file = paste0("results/cosmos/native/res_mofamoon_combined_reduced_",cell_line,".Rdata"))
   combined_ATT_reduced <- res_mofa_combined_reduced[[2]]
@@ -403,11 +411,12 @@ for (cell_line in c("SF-539", "MOLT-4")) {
   deleteSelectedEdges(network = paste0("Full COSMOS native network ", cell_line))
   
   setNodeShapeDefault("ROUND_RECTANGLE", style.name) #remember to specify your style.name!
-  setNodeShapeMapping(table.column = "NodeType", table.column.values = list("1","2","3"),shapes = list("Octagon","VEE","Triangle"), style.name = style.name, network = paste0("Full COSMOS native network ", cell_line))
+  setNodeShapeMapping(table.column = "NodeType", table.column.values = list("1","2","3","4","5"),shapes = list("Octagon","VEE","Triangle","Diamond","Ellipse"), style.name = style.name, network = paste0("Full COSMOS native network ", cell_line))
   setNodeColorDefault("#89D0F5", style.name)
   setNodeLabelMapping("name", style.name, network = paste0("Full COSMOS native network ", cell_line))
   setNodeHeightDefault(35,style.name)
   setNodeFontSizeDefault(12,style.name)
+  setNodeFontFaceDefault("TimesNewRomanPSMT",style.name)
   setNodeWidthDefault(75,style.name)
   setNodeBorderWidthDefault(12, style.name = style.name)
 
@@ -430,7 +439,7 @@ for (cell_line in c("SF-539", "MOLT-4")) {
 style.name = "dataStyle_cosmos_native_MAPK_pathway"
 createVisualStyle(style.name)
 
-for (cell_line in c("SF-539", "MOLT-4")) { 
+for (cell_line in c("SF-539", "MOLT-4", "NCI-H226")) { 
   
   load(file = paste0("results/cosmos/native/res_mofamoon_combined_reduced_",cell_line,".Rdata"))
   
@@ -463,11 +472,12 @@ for (cell_line in c("SF-539", "MOLT-4")) {
   setEdgeTargetArrowShapeMapping(table.column = "sign",table.column.values =  list("-1","1"), shapes = list("T","ARROW"), style.name = style.name, network = paste0("Native COSMOS EGF_EGFR_RAS_ERK_pathway_start_end ", cell_line))
   setEdgeLineWidthDefault(2, style.name)
   setNodeShapeDefault("ROUND_RECTANGLE", style.name) 
-  setNodeShapeMapping(table.column = "NodeType", table.column.values = list("1","2","3"),shapes = list("Octagon","VEE","Triangle"), style.name = style.name, network = paste0("Native COSMOS EGF_EGFR_RAS_ERK_pathway_start_end ", cell_line))
+  setNodeShapeMapping(table.column = "NodeType", table.column.values = list("1","2","3","4","5"),shapes = list("Octagon","VEE","Triangle","Diamond","Ellipse"), style.name = style.name, network = paste0("Native COSMOS EGF_EGFR_RAS_ERK_pathway_start_end ", cell_line))
   setNodeColorDefault("#89D0F5", style.name)
   setNodeLabelMapping("name", style.name, network = paste0("Native COSMOS EGF_EGFR_RAS_ERK_pathway_start_end ", cell_line))
   setNodeHeightDefault(35,style.name)
   setNodeFontSizeDefault(12,style.name)
+  setNodeFontFaceDefault("TimesNewRomanPSMT",style.name)
   setNodeWidthDefault(75,style.name)
   setNodeBorderWidthDefault(12, style.name = style.name)
 
@@ -489,7 +499,7 @@ for (cell_line in c("SF-539", "MOLT-4")) {
 ```
 
 ```{r, eval=FALSE}
-for (cell_line in c("SF-539", "MOLT-4")) {
+for (cell_line in c("SF-539", "MOLT-4", "NCI-H226")) {
   exportImage(filename = paste0("results/cytoscape/full_network_cosmos_native_", cell_line), type = "PDF", resolution = 900, network =  paste0("Full COSMOS native network ", cell_line))
   exportImage(filename = paste0("results/cytoscape/subnetwork_EGF_EGFR_RAS_ERK_pathway_extended_cosmos_native_", cell_line), type = "PDF", resolution = 900, network = paste0("Native COSMOS EGF_EGFR_RAS_ERK_pathway_start_end ", cell_line))
 }  

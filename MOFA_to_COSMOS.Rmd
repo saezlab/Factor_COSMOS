@@ -766,10 +766,13 @@ combined_ATT <- as.data.frame(combined_ATT %>%
 Further, we can also add the MOFA weight and activity score information to the list of attributes.
 
 ```{r Add activities and weights to network}
-## TF
-TF_weights <- ligrec_TF_moon_inputs$TF
-names(TF_weights) <- gsub("_TF","",names(TF_weights))
-TF_weights <- data.frame(Nodes = names(TF_weights), mofa_weights = TF_weights)
+## MOFA weights
+MOFA_weights <- get_weights(model, factors = 4, as.data.frame = T)
+MOFA_weights <- MOFA_weights %>%
+  arrange(feature, view) %>%
+  filter(!duplicated(feature))
+MOFA_weights <- MOFA_weights[,c(1,3)]
+colnames(MOFA_weights) <- c("Nodes", "mofa_weights")
 
 ## Ligands
 lig_weights <- ligrec_TF_moon_inputs$ligrec
@@ -778,7 +781,7 @@ lig_weights <- tapply(lig_weights, names(lig_weights), mean)
 ligands <- names(lig_weights)
 lig_weights <- as.numeric(lig_weights)
 names(lig_weights) <- ligands
-lig_weights <- data.frame(Nodes = names(lig_weights), mofa_weights = lig_weights)
+lig_weights <- data.frame(Nodes = names(lig_weights), feature_weights = lig_weights)
 
 ## Receptors
 rec_weights <- ligrec_TF_moon_inputs$ligrec
@@ -787,26 +790,31 @@ rec_weights <- tapply(rec_weights, names(rec_weights), mean)
 receptors <- names(rec_weights)
 rec_weights <- as.numeric(rec_weights)
 names(rec_weights) <- receptors
-rec_weights <- data.frame(Nodes = names(rec_weights), mofa_weights = rec_weights)
+rec_weights <- data.frame(Nodes = names(rec_weights), feature_weights = rec_weights)
+
+## TF
+TF_weights <- ligrec_TF_moon_inputs$TF
+names(TF_weights) <- gsub("_TF","",names(TF_weights))
+TF_weights <- TF_weights[!(names(TF_weights) %in% c(rec_weights$Nodes,lig_weights$Nodes))]
+TF_weights <- data.frame(Nodes = names(TF_weights), feature_weights = TF_weights)
 
 ## mOOn
 moon_weights <- ligrec_TF_moon_inputs$moon
-moon_weights <- moon_weights[!(names(moon_weights) %in% rec_weights$Nodes)]
-moon_weights <- data.frame(Nodes = names(moon_weights), mofa_weights = moon_weights)
-
-## Metabolites
-metab_weights <- data.frame(Nodes = names(metab_inputs), mofa_weights = metab_inputs)
+moon_weights <- moon_weights[!(names(moon_weights) %in% c(rec_weights$Nodes,TF_weights$Nodes, lig_weights$Nodes))]
+moon_weights <- data.frame(Nodes = names(moon_weights), feature_weights = moon_weights)
 
 ## Combine
-feature_weights <- as.data.frame(rbind(TF_weights, rec_weights, lig_weights, moon_weights, metab_weights))
+feature_weights <- as.data.frame(rbind(TF_weights, rec_weights, lig_weights, moon_weights))
 
 ## Add weights to data
+combined_ATT <- merge(combined_ATT, MOFA_weights, all.x = T)
 combined_ATT <- merge(combined_ATT, feature_weights, all.x = T)
 ```
 
-To identify whether a node is a ligand or a receptor, we first load the consensus PKN from LIANA and only keep entries which represent an interaction in our network.
+To identify whether a node is a ligand, receptor, TF or master regulator, we first load the consensus PKNs and only keep entries which represent an interaction in our network.
 
-```{r Load consensus LIANA}
+```{r Load consensus}
+# LIANA
 ligrec_ressource <- distinct(liana::decomplexify(liana::select_resource("Consensus")[[1]]))
 ligrec_df <- ligrec_ressource[,c("source_genesymbol","target_genesymbol")]
 ligrec_df <- distinct(ligrec_df)
@@ -818,12 +826,20 @@ ligrec_df$Sign <- 1
 ligrec_df$Weight <- 1
 
 ligrec_df <- ligrec_df[ligrec_df$Node1 %in% combined_ATT$Nodes & ligrec_df$Node2 %in% combined_ATT$Nodes, ]
+
+# Load Dorothea (TF) network
+dorothea_df <- decoupleR::get_dorothea()
+dorothea_df <- dorothea_df[dorothea_df$source %in% combined_ATT$Nodes,]
+
+# Load meta footprint analysis (moon) regulatory network 
+moon_regulons <- moon::build_moon_regulons()
+moon_regulons <- moon_regulons[moon_regulons$source %in% combined_ATT$Nodes,]
 ```
 
-Then, we add the information to the network (ligand = 2, receptor = 3, other = 1, no NodeType available = 0).
+Then, we add the information to the network (ligand = 2, receptor = 3, transcription factor = 4, master regulator = 5, other = 1, no NodeType available = 0).
 
 ```{r Set NodeType}
-combined_ATT$NodeType <- ifelse(combined_ATT$Nodes %in% ligrec_df$Node1, 2, ifelse(combined_ATT$Nodes %in% ligrec_df$Node2, 3, combined_ATT$NodeType)) #if node is a ligand set NodeType to 2, if node is a receptor set NodeType to 3, else keep 0 or 1
+combined_ATT$NodeType <- ifelse(combined_ATT$Nodes %in% ligrec_df$Node1, 2, ifelse(combined_ATT$Nodes %in% ligrec_df$Node2, 3, ifelse(combined_ATT$Nodes %in% dorothea_df$source, 4, ifelse(combined_ATT$Nodes %in% moon_regulons$source, 5, combined_ATT$NodeType)))) #if node is a ligand set NodeType to 2, if node is a receptor set NodeType to 3, if node is a TF set NodeType to 4, if node is a master regulator set NodeType to 5, else keep 0 or 1
 
 write_csv(combined_ATT, file = "results/cosmos/ATT_mofamoon_combined.csv")
 ```
