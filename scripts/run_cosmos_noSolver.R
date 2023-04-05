@@ -74,7 +74,7 @@ if(i < 10)
 }
 
 #####
-write_csv(recursive_decoupleRnival_res, file = "ATT_decouplerino_full.csv")
+write_csv(recursive_decoupleRnival_res, file = paste("results/decoupleRnival/",paste(cell_line, "_ATT_decouplerino_full.csv",sep = ""), sep = ""))
 
 plot(density(recursive_decoupleRnival_res$score))
 abline(v = 1)
