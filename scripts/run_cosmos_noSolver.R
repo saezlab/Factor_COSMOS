@@ -36,10 +36,14 @@ meta_network <- cosmosR:::filter_pkn_expressed_genes(names(RNA_input), meta_pkn 
 #Filter inputs and prune the meta_network to only keep nodes that can be found downstream of the inputs
 #The number of step is quite flexible, 7 steps already covers most of the network
 
-n_steps <- 7
+n_steps <- 10
+
+# in this step we prune the network to keep only the relevant part between upstream and downstream nodes
 sig_input <- cosmosR:::filter_input_nodes_not_in_pkn(sig_input, meta_network)
 meta_network <- cosmosR:::keep_controllable_neighbours(meta_network, n_steps, names(sig_input))
-
+metab_input <- cosmosR:::filter_input_nodes_not_in_pkn(metab_input, meta_network)
+meta_network <- cosmosR:::keep_observable_neighbours(meta_network, n_steps, names(metab_input))
+sig_input <- cosmosR:::filter_input_nodes_not_in_pkn(sig_input, meta_network)
 #####
 load("support/dorothea_reg.RData")
 
@@ -53,7 +57,8 @@ while (before != after & i < 10) {
   recursive_decoupleRnival_res <- decoupleRnival(upstream_input = sig_input, 
                                                               downstream_input = metab_input, 
                                                               meta_network = meta_network, 
-                                                              n_layers = n_steps)
+                                                              n_layers = n_steps, 
+                                                              n_perm = 100) # 1000 is better for definitive results
   
   meta_network_TF_to_metab <- filter_incohrent_TF_target(recursive_decoupleRnival_res, dorothea_reg, meta_network_TF_to_metab, RNA_input)
   after <- length(meta_network_TF_to_metab[,1])
@@ -62,7 +67,7 @@ while (before != after & i < 10) {
 
 if(i < 10)
 {
-  print(paste("Converged after ",paste(i," iterations", sep = ""),sep = ""))
+  print(paste("Converged after ",paste(i-1," iterations", sep = ""),sep = ""))
 } else
 {
   print(paste("Interupted after ",paste(i," iterations. Convergence uncertain.", sep = ""),sep = ""))
@@ -77,12 +82,13 @@ abline(v = -1)
 
 solution_network <- reduce_solution_network(decoupleRnival_res = recursive_decoupleRnival_res, 
                                             meta_network = meta_network,
-                                            cutoff = 1.3, 
+                                            cutoff = 1, 
                                             upstream_input = sig_input, 
                                             RNA_input = RNA_input, 
                                             n_steps = n_steps)
 
 SIF <- solution_network$SIF
+names(SIF)[3] <- "sign"
 ATT <- solution_network$ATT
 
 
