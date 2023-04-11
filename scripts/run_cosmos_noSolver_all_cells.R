@@ -60,7 +60,7 @@ for(cell_line in names(cosmos_inputs))
       before <- length(meta_network_TF_to_metab[,1])
       recursive_decoupleRnival_res <- decoupleRnival(upstream_input = sig_input, 
                                                      downstream_input = metab_input, 
-                                                     meta_network = meta_network, 
+                                                     meta_network = meta_network_TF_to_metab, 
                                                      n_layers = n_steps, 
                                                      n_perm = 100) # 1000 is better for definitive results
       

@@ -1,13 +1,15 @@
-if (!requireNamespace("devtools", quietly = TRUE))
-  install.packages("devtools")
-
-devtools::install_github("saezlab/cosmosR")
-devtools::install_github("saezlab/decoupleR")
+# if (!requireNamespace("devtools", quietly = TRUE))
+#   install.packages("devtools")
+# 
+# devtools::install_github("saezlab/cosmosR")
+# devtools::install_github("saezlab/decoupleR")
 
 library(cosmosR)
 library(readr)
 library(dplyr)
 library(decoupleR)
+
+source("scripts/decoupleRnival_test.R")
 
 data("meta_network")
 
@@ -36,7 +38,7 @@ meta_network <- cosmosR:::filter_pkn_expressed_genes(names(RNA_input), meta_pkn 
 #Filter inputs and prune the meta_network to only keep nodes that can be found downstream of the inputs
 #The number of step is quite flexible, 7 steps already covers most of the network
 
-n_steps <- 10
+n_steps <- 7
 
 # in this step we prune the network to keep only the relevant part between upstream and downstream nodes
 sig_input <- cosmosR:::filter_input_nodes_not_in_pkn(sig_input, meta_network)
@@ -56,7 +58,7 @@ while (before != after & i < 10) {
   before <- length(meta_network_TF_to_metab[,1])
   recursive_decoupleRnival_res <- decoupleRnival(upstream_input = sig_input, 
                                                               downstream_input = metab_input, 
-                                                              meta_network = meta_network, 
+                                                              meta_network = meta_network_TF_to_metab, 
                                                               n_layers = n_steps, 
                                                               n_perm = 100) # 1000 is better for definitive results
   
@@ -93,5 +95,5 @@ ATT <- solution_network$ATT
 
 
 # You can export the table to csv to import them in cytoscape
-write_csv(SIF, file = paste("results/decoupleRnival/",paste(cell_line, "_SIF.csv",sep = ""), sep = ""))
-write_csv(ATT, file = paste("results/decoupleRnival/",paste(cell_line, "_ATT.csv",sep = ""), sep = ""))
+# write_csv(SIF, file = paste("results/decoupleRnival/",paste(cell_line, "_SIF.csv",sep = ""), sep = ""))
+# write_csv(ATT, file = paste("results/decoupleRnival/",paste(cell_line, "_ATT.csv",sep = ""), sep = ""))

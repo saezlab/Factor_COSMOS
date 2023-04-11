@@ -18,7 +18,6 @@ Gene5578__orphanReacAHCYStr,Metab__HMDB0000939_r,1,TRUE
 Gene5578__orphanReacAHCYStr_reverse,Metab__HMDB0000939_c,1,TRUE
 Gene6707__orphanReacAHCYSte,Metab__HMDB0000939_c,1,TRUE
 Gene6707__orphanReacAHCYSte_reverse,Metab__HMDB0000939_e,1,TRUE
-Gene8988__AKR1A1_reverse,Metab__HMDB0000143_c,1,TRUE
 Metab__HMDB0000742_c,Gene3616__orphanReacHCYSte_reverse,1,TRUE
 Metab__HMDB0000742_c,Gene3840__AHCYL1_reverse,1,TRUE
 Metab__HMDB0000742_c,Gene3840__AHCY_reverse,1,TRUE
