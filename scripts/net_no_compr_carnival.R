@@ -30,7 +30,7 @@ meta_network <- cosmosR:::filter_pkn_expressed_genes(names(RNA_input), meta_pkn 
 #Filter inputs and prune the meta_network to only keep nodes that can be found downstream of the inputs
 #The number of step is quite flexible, 7 steps already covers most of the network
 
-n_steps <- 4
+n_steps <- 5
 
 # in this step we prune the network to keep only the relevant part between upstream and downstream nodes
 sig_input <- cosmosR:::filter_input_nodes_not_in_pkn(sig_input, meta_network)
@@ -48,7 +48,7 @@ my_options <- default_CARNIVAL_options(solver = "cplex")
 #Here the user should provide a path to its CPLEX executable (only cplex at the moment, other solvers will be documented soon !)
 # my_options$solverPath <- "~/Documents/cplex" #or cbc solver executable
 # my_options$solverPath <- "./cplex"
-my_options$solverPath <- "cplex_macos/cplex" #or cbc solver executable
+my_options$solverPath <- "cplex_win/cplex.exe" #or cbc solver executable
 # my_options$solver <- "cplex" #or cbc
 my_options$solver <- "cplex"
 my_options$timelimit <- 3600/10

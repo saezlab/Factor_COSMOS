@@ -1,6 +1,7 @@
 library(cosmosR)
 library(ocean)
 library(reshape2)
+library(readr)
 
 data("meta_network")
 
@@ -29,7 +30,7 @@ meta_network <- cosmosR:::filter_pkn_expressed_genes(names(RNA_input), meta_pkn 
 #Filter inputs and prune the meta_network to only keep nodes that can be found downstream of the inputs
 #The number of step is quite flexible, 7 steps already covers most of the network
 
-n_steps <- 10
+n_steps <- 5
 
 # in this step we prune the network to keep only the relevant part between upstream and downstream nodes
 sig_input <- cosmosR:::filter_input_nodes_not_in_pkn(sig_input, meta_network)
@@ -44,9 +45,13 @@ nodes <- unique(c(df$source,df$target))
 
 parents <- nodes[which(nodes %in% meta_network$source)]
 
-children_signature <- sapply(parents, function(parent,df){
-  return(paste("parent_of_",paste0(unlist(df[which(df[,1] == parent),2]), collapse = "_____"), sep = ""))
-},df = df, USE.NAMES = T, simplify = F)
+df_signature <- df
+df_signature[,2] <- paste(df_signature[,2],df_signature[,3],sep = "")
+
+children_signature <- sapply(parents, function(parent,df_signature){
+  
+  return(paste("parent_of_",paste0(unlist(df_signature[which(df_signature[,1] == parent),2]), collapse = "_____"), sep = ""))
+},df_signature = df_signature, USE.NAMES = T, simplify = F)
 
 dubs <- children_signature[duplicated(children_signature)]
 
@@ -125,7 +130,7 @@ abline(v = -1)
 
 solution_network <- reduce_solution_network(decoupleRnival_res = recursive_decoupleRnival_res, 
                                             meta_network = meta_network,
-                                            cutoff = 1, 
+                                            cutoff = 1.7, 
                                             upstream_input = sig_input, 
                                             RNA_input = RNA_input, 
                                             n_steps = n_steps)
@@ -134,7 +139,8 @@ SIF <- solution_network$SIF
 names(SIF)[3] <- "sign"
 ATT <- solution_network$ATT
 
-
+write_csv(SIF, file = paste("results/",paste(cell_line, "_dec_compressed_SIF.csv",sep = ""), sep = ""))
+write_csv(ATT, file = paste("results/",paste(cell_line, "_dec_compressed_ATT.csv",sep = ""), sep = ""))
 
 
 X7860_ATT_decouplerino_full <- as.data.frame(read_csv("results/decoupleRnival/7860_ATT_decouplerino_full.csv"))

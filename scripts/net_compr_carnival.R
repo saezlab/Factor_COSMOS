@@ -30,7 +30,7 @@ meta_network <- cosmosR:::filter_pkn_expressed_genes(names(RNA_input), meta_pkn 
 #Filter inputs and prune the meta_network to only keep nodes that can be found downstream of the inputs
 #The number of step is quite flexible, 7 steps already covers most of the network
 
-n_steps <- 4
+n_steps <- 5
 
 # in this step we prune the network to keep only the relevant part between upstream and downstream nodes
 sig_input <- cosmosR:::filter_input_nodes_not_in_pkn(sig_input, meta_network)
@@ -43,11 +43,15 @@ df <- meta_network
 
 nodes <- unique(c(df$source,df$target))
 
-parents <- nodes[which(nodes %in% meta_network$source)]
+parents <- nodes[which(nodes %in% df$source)]
 
-children_signature <- sapply(parents, function(parent,df){
-  return(paste("parent_of_",paste0(unlist(df[which(df[,1] == parent),2]), collapse = "_____"), sep = ""))
-},df = df, USE.NAMES = T, simplify = F)
+df_signature <- df
+df_signature[,2] <- paste(df_signature[,2],df_signature[,3],sep = "")
+
+children_signature <- sapply(parents, function(parent,df_signature){
+  
+  return(paste("parent_of_",paste0(unlist(df_signature[which(df_signature[,1] == parent),2]), collapse = "_____"), sep = ""))
+},df_signature = df_signature, USE.NAMES = T, simplify = F)
 
 dubs <- children_signature[duplicated(children_signature)]
 
@@ -84,7 +88,7 @@ my_options <- default_CARNIVAL_options(solver = "cplex")
 #Here the user should provide a path to its CPLEX executable (only cplex at the moment, other solvers will be documented soon !)
 # my_options$solverPath <- "~/Documents/cplex" #or cbc solver executable
 # my_options$solverPath <- "./cplex"
-my_options$solverPath <- "cplex_macos/cplex" #or cbc solver executable
+my_options$solverPath <- "cplex_win/cplex.exe" #or cbc solver executable
 # my_options$solver <- "cplex" #or cbc
 my_options$solver <- "cplex"
 my_options$timelimit <- 3600/10
@@ -113,12 +117,107 @@ formatted_res <- format_COSMOS_res(test_result_for)
 SIF <- formatted_res[[1]]
 ATT <- formatted_res[[2]]
 
+duplicated_parents_df <- data.frame(duplicated_parents)
+duplicated_parents_df$source_original <- row.names(duplicated_parents_df)
+names(duplicated_parents_df)[1] <- "Nodes"
+
+addons <- data.frame(names(children_signature)[-which(names(children_signature) %in% duplicated_parents_df$source_original)]) 
+names(addons)[1] <- "Nodes"
+addons$source_original <- addons$Nodes
+
+mapping_table <- as.data.frame(rbind(duplicated_parents_df,addons))
+
+data("HMDB_mapper_vec")
+
+mapping_table[, 1] <- sapply(mapping_table[, 1], function(x, HMDB_mapper_vec) {
+  x <- gsub("Metab__", "", x)
+  x <- gsub("^Gene", "Enzyme", x)
+  suffixe <- stringr::str_extract(x, "_[a-z]$")
+  x <- gsub("_[a-z]$", "", x)
+  if (x %in% names(HMDB_mapper_vec)) {
+    x <- HMDB_mapper_vec[x]
+    x <- paste("Metab__", x, sep = "")
+  }
+  if (!is.na(suffixe)) {
+    x <- paste(x, suffixe, sep = "")
+  }
+  return(x)
+}, HMDB_mapper_vec = HMDB_mapper_vec)
+  
+mapping_table[, 2] <- sapply(mapping_table[, 2], function(x, HMDB_mapper_vec) {
+  x <- gsub("Metab__", "", x)
+  x <- gsub("^Gene", "Enzyme", x)
+  suffixe <- stringr::str_extract(x, "_[a-z]$")
+  x <- gsub("_[a-z]$", "", x)
+  if (x %in% names(HMDB_mapper_vec)) {
+    x <- HMDB_mapper_vec[x]
+    x <- paste("Metab__", x, sep = "")
+  }
+  if (!is.na(suffixe)) {
+    x <- paste(x, suffixe, sep = "")
+  }
+  return(x)
+}, HMDB_mapper_vec = HMDB_mapper_vec)
+
+# View(ATT[!(ATT$Nodes %in% mapping_table$Nodes),])
+
+ATT <- merge(ATT, mapping_table, by = "Nodes")
+ATT <- ATT[,c(9,2:8)]
+names(ATT)[1] <- "Nodes"
+
+SIF <- meta_network
+
+SIF[, 1] <- sapply(SIF[, 1], function(x, HMDB_mapper_vec) {
+  x <- gsub("Metab__", "", x)
+  x <- gsub("^Gene", "Enzyme", x)
+  suffixe <- stringr::str_extract(x, "_[a-z]$")
+  x <- gsub("_[a-z]$", "", x)
+  if (x %in% names(HMDB_mapper_vec)) {
+    x <- HMDB_mapper_vec[x]
+    x <- paste("Metab__", x, sep = "")
+  }
+  if (!is.na(suffixe)) {
+    x <- paste(x, suffixe, sep = "")
+  }
+  return(x)
+}, HMDB_mapper_vec = HMDB_mapper_vec)
+
+SIF[, 2] <- sapply(SIF[, 2], function(x, HMDB_mapper_vec) {
+  x <- gsub("Metab__", "", x)
+  x <- gsub("^Gene", "Enzyme", x)
+  suffixe <- stringr::str_extract(x, "_[a-z]$")
+  x <- gsub("_[a-z]$", "", x)
+  if (x %in% names(HMDB_mapper_vec)) {
+    x <- HMDB_mapper_vec[x]
+    x <- paste("Metab__", x, sep = "")
+  }
+  if (!is.na(suffixe)) {
+    x <- paste(x, suffixe, sep = "")
+  }
+  return(x)
+}, HMDB_mapper_vec = HMDB_mapper_vec)
+
+SIF <- SIF[SIF$source %in% ATT$Nodes & 
+             SIF$target %in% ATT$Nodes,]
+
+
+
+SIF$Weight <- apply(SIF, 1, function(x, ATT){
+  source_act <- ATT[ATT$Nodes == x[1],"Activity"]
+  target_act <- ATT[ATT$Nodes == x[2],"Activity"]
+  coherence <- source_act * target_act 
+  weight <- ifelse(sign(coherence) == sign(as.numeric(x[3])), min(abs(c(source_act, target_act))), 0)
+  return(weight)
+}, ATT = ATT)
+
 SIF <- SIF[which(SIF$Weight != 0),]
 
 RNA_input_df <- data.frame(Nodes = names(RNA_input), t = RNA_input)
 ATT <- merge(ATT, RNA_input_df, all.x = T)
 ATT <- ATT[ATT$AvgAct != 0,]
 
+SIF <- SIF[SIF$source %in% ATT$Nodes & 
+             SIF$target %in% ATT$Nodes,]
 
 write_csv(SIF, file = paste("results/",paste(cell_line, "_compressed_SIF.csv",sep = ""), sep = ""))
 write_csv(ATT, file = paste("results/",paste(cell_line, "_compressed_ATT.csv",sep = ""), sep = ""))
