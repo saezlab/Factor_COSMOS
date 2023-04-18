@@ -53,7 +53,9 @@ children_signature <- sapply(parents, function(parent,df_signature){
   return(paste("parent_of_",paste0(unlist(df_signature[which(df_signature[,1] == parent),2]), collapse = "_____"), sep = ""))
 },df_signature = df_signature, USE.NAMES = T, simplify = F)
 
-dubs <- children_signature[duplicated(children_signature)]
+dubs <- children_signature[duplicated(children_signature) & 
+                             !(names(children_signature) %in% names(metab_input) | 
+                                 names(children_signature) %in% names(sig_input))]
 
 duplicated_parents <- unlist(children_signature[which(children_signature %in% dubs)])
 

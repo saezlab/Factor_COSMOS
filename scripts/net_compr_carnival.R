@@ -53,7 +53,9 @@ children_signature <- sapply(parents, function(parent,df_signature){
   return(paste("parent_of_",paste0(unlist(df_signature[which(df_signature[,1] == parent),2]), collapse = "_____"), sep = ""))
 },df_signature = df_signature, USE.NAMES = T, simplify = F)
 
-dubs <- children_signature[duplicated(children_signature)]
+dubs <- children_signature[duplicated(children_signature) & 
+                             !(names(children_signature) %in% names(metab_input) | 
+                                 names(children_signature) %in% names(sig_input))]
 
 duplicated_parents <- unlist(children_signature[which(children_signature %in% dubs)])
 
@@ -87,8 +89,8 @@ my_options <- default_CARNIVAL_options(solver = "cplex")
 
 #Here the user should provide a path to its CPLEX executable (only cplex at the moment, other solvers will be documented soon !)
 # my_options$solverPath <- "~/Documents/cplex" #or cbc solver executable
-# my_options$solverPath <- "./cplex"
-my_options$solverPath <- "cplex_win/cplex.exe" #or cbc solver executable
+my_options$solverPath <- "cplex_macos/cplex"
+# my_options$solverPath <- "cplex_win/cplex.exe" #or cbc solver executable
 # my_options$solver <- "cplex" #or cbc
 my_options$solver <- "cplex"
 my_options$timelimit <- 3600/10
