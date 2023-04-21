@@ -39,45 +39,13 @@ metab_input <- cosmosR:::filter_input_nodes_not_in_pkn(metab_input, meta_network
 meta_network <- cosmosR:::keep_observable_neighbours(meta_network, n_steps, names(metab_input))
 sig_input <- cosmosR:::filter_input_nodes_not_in_pkn(sig_input, meta_network)
 
-df <- meta_network
+meta_network_compressed_list <- compress_same_children(meta_network, sig_input = sig_input, metab_input = metab_input)
 
-nodes <- unique(c(df$source,df$target))
+meta_network_compressed <- meta_network_compressed_list$compressed_network
 
-parents <- nodes[which(nodes %in% meta_network$source)]
+node_signatures <- meta_network_compressed_list$node_signatures
 
-df_signature <- df
-df_signature[,2] <- paste(df_signature[,2],df_signature[,3],sep = "")
-
-children_signature <- sapply(parents, function(parent,df_signature){
-  
-  return(paste("parent_of_",paste0(unlist(df_signature[which(df_signature[,1] == parent),2]), collapse = "_____"), sep = ""))
-},df_signature = df_signature, USE.NAMES = T, simplify = F)
-
-dubs <- children_signature[duplicated(children_signature) & 
-                             !(names(children_signature) %in% names(metab_input) | 
-                                 names(children_signature) %in% names(sig_input))]
-
-duplicated_parents <- unlist(children_signature[which(children_signature %in% dubs)])
-
-df[,1] <- sapply(df[,1], function(node,duplicated_parents){
-  if(node %in% names(duplicated_parents))
-  {
-    node <- duplicated_parents[node]
-  }
-  return(node)
-},duplicated_parents = duplicated_parents, simplify = T)
-
-df[,2] <- sapply(df[,2], function(node,duplicated_parents){
-  if(node %in% names(duplicated_parents))
-  {
-    node <- duplicated_parents[node]
-  }
-  return(node)
-},duplicated_parents = duplicated_parents, simplify = T)
-
-df <- unique(df)
-
-meta_network_compressed <- df
+duplicated_parents <- meta_network_compressed_list$duplicated_signatures
 
 meta_network_compressed <- meta_network_cleanup(meta_network_compressed)
 
@@ -116,7 +84,7 @@ duplicated_parents_df <- data.frame(duplicated_parents)
 duplicated_parents_df$source_original <- row.names(duplicated_parents_df)
 names(duplicated_parents_df)[1] <- "source"
 
-addons <- data.frame(names(children_signature)[-which(names(children_signature) %in% duplicated_parents_df$source_original)]) 
+addons <- data.frame(names(node_signatures)[-which(names(node_signatures) %in% duplicated_parents_df$source_original)]) 
 names(addons)[1] <- "source"
 addons$source_original <- addons$source
 
@@ -132,7 +100,7 @@ abline(v = -1)
 
 solution_network <- reduce_solution_network(decoupleRnival_res = recursive_decoupleRnival_res, 
                                             meta_network = meta_network,
-                                            cutoff = 1.7, 
+                                            cutoff = 1.5, 
                                             upstream_input = sig_input, 
                                             RNA_input = RNA_input, 
                                             n_steps = n_steps)
@@ -140,6 +108,13 @@ solution_network <- reduce_solution_network(decoupleRnival_res = recursive_decou
 SIF <- solution_network$SIF
 names(SIF)[3] <- "sign"
 ATT <- solution_network$ATT
+
+data("HMDB_mapper_vec")
+
+translated_res <- translate_res(SIF,ATT,HMDB_mapper_vec)
+
+SIF <- translated_res[[1]]
+ATT <- translated_res[[2]]
 
 write_csv(SIF, file = paste("results/",paste(cell_line, "_dec_compressed_SIF.csv",sep = ""), sep = ""))
 write_csv(ATT, file = paste("results/",paste(cell_line, "_dec_compressed_ATT.csv",sep = ""), sep = ""))

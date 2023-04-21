@@ -1,4 +1,4 @@
-source,target,interaction,Weight
+source,target,sign,Weight
 BSG,Enzyme757700002__BSG,1,0.6666666666666665
 CAV1,BSG,-1,0.6666666666666665
 E2F1,FGFR1,1,0.33333333333333326
@@ -14,19 +14,11 @@ FGFR1,STAT1,1,0.33333333333333326
 Enzyme1338__AKR1A1,Metab__D-Glucitol_c,1,1
 Enzyme1338__AKR1B1,Metab__D-Glucitol_c,1,1
 Enzyme1338__AKR7A2,Metab__D-Glucitol_c,1,1
-Enzyme222200002__SLC16A1,Metab__L-Lactic acid_c,1,1
-Enzyme2759__orphanReacLACLt,Metab__L-Lactic acid_c,1,1
-Enzyme3860__ALDH9A1,Metab__L-Lactic acid_c,1,1
 Enzyme7338__LDHA_reverse,Metab__L-Lactic acid_c,1,1
-Enzyme7338__LDHB_reverse,Metab__L-Lactic acid_c,1,1
-Enzyme7338__UEVLD_reverse,Metab__L-Lactic acid_c,1,1
 Enzyme757700002__BSG,Metab__L-Lactic acid_c,1,1
 Enzyme9047__SLC2A1,Metab__D-Glucose_c,1,1
-Enzyme9047__SLC2A6,Metab__D-Glucose_c,1,1
-Enzyme9047__SLC2A8,Metab__D-Glucose_c,1,1
 Enzyme9049__SLC2A1_reverse,Metab__D-Glucose_c,1,1
 Enzyme9172__LDHA_reverse,Metab__L-Lactic acid_m,1,1
-Enzyme9172__LDHB_reverse,Metab__L-Lactic acid_m,1,1
 Enzyme918200002__SLC16A1,Metab__L-Lactic acid_m,1,1
 HIF1A,ETS1,1,1
 HIF1A,LDHA,1,0.33333333333333326
@@ -54,7 +46,6 @@ Metab__D-Glucose_c,Enzyme1338__AKR1A1,1,1
 Metab__D-Glucose_c,Enzyme1338__AKR1B1,1,1
 Metab__D-Glucose_c,Enzyme1338__AKR7A2,1,1
 Metab__L-Lactic acid_c,Enzyme918200002__SLC16A1,1,1
-Metab__L-Lactic acid_e,Enzyme757700002__BSG,1,0.6666666666666665
 Metab__D-Glucitol_c,MAPK14,1,0.22222222222222218
 NFKB1,JUN,1,1
 NFKB1,RELA,1,1
@@ -65,7 +56,6 @@ PRKCA,EGFR,-1,0.22222222222222218
 PRKCA,IRS1,-1,0.2222222222222222
 PRKCA,RARA,1,0.2222222222222222
 PRKCA,RELA,1,0.2222222222222222
-PTPN1,CAV1,-1,0.1111111111111111
 RARA,PRKCA,1,0.2222222222222222
 RELA,EGR1,1,1
 RELA,JUN,1,1
