@@ -9,7 +9,7 @@ library(dplyr)
 
 data("meta_network")
 
-meta_network <- meta_network[-which(meta_network$source == meta_network$target),]
+meta_network <- meta_network_cleanup(meta_network)
 
 load("data/cosmos/cosmos_inputs.RData")
 
@@ -30,14 +30,14 @@ metab_input <- metab_input[abs(metab_input) > 2]
 
 #In order to adapt options to users specification we can load them into a variable 
 #that will then be passed to preprocess_COSMOS_signaling_to_metabolism CARNIVAL_options parameter
-my_options <- default_CARNIVAL_options(solver = "cbc")
+my_options <- default_CARNIVAL_options(solver = "cplex")
 
 #Here the user should provide a path to its CPLEX executable (only cplex at the moment, other solvers will be documented soon !)
 # my_options$solverPath <- "~/Documents/cplex" #or cbc solver executable
-# my_options$solverPath <- "./cplex"
-my_options$solverPath <- "cbc/cbc-osx/cbc" #or cbc solver executable
-# my_options$solver <- "cplex" #or cbc
-my_options$solver <- "cbc"
+my_options$solverPath <- "cplex_macos/cplex"
+# my_options$solverPath <- "cbc/cbc-osx/cbc" #or cbc solver executable
+my_options$solver <- "cplex" #or cbc
+# my_options$solver <- "cbc"
 my_options$timelimit <- 3600/10
 my_options$mipGAP <- 0.05
 my_options$threads <- 6
@@ -45,7 +45,7 @@ my_options$threads <- 6
 metab_input <- cosmosR:::filter_input_nodes_not_in_pkn(metab_input, meta_network)
 sig_input <- cosmosR:::filter_input_nodes_not_in_pkn(sig_input, meta_network)
 
-test_for <- preprocess_COSMOS_signaling_to_metabolism(meta_network = meta_network,
+test_for <- preprocess_COSMOS_signaling_to_metabolism(meta_network = meta_network[,c(1,3,2)],
                                                       signaling_data = sig_input,
                                                       metabolic_data = metab_input,
                                                       diff_expression_data = RNA_input,
