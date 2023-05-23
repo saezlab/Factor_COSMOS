@@ -1,0 +1,95 @@
+library(cosmosR)
+library(ocean)
+library(reshape2)
+library(readr)
+
+data("meta_network")
+
+meta_network <- meta_network_cleanup(meta_network)
+
+load("data/cosmos/cosmos_inputs.RData")
+
+names(cosmos_inputs)
+
+cell_line <- "786-0"
+
+sig_input <- cosmos_inputs[[cell_line]]$TF_scores
+metab_input <- cosmos_inputs[[cell_line]]$metabolomic
+RNA_input <- cosmos_inputs[[cell_line]]$RNA
+
+#Choose which compartment to assign to the metabolic measurments
+metab_input <- prepare_metab_inputs(metab_input, c("c","m"))
+
+##Filter significant inputs
+sig_input <- sig_input[abs(sig_input) > 2]
+metab_input <- metab_input[abs(metab_input) > 2]
+
+#Remove genes that are not expressed from the meta_network
+meta_network <- cosmosR:::filter_pkn_expressed_genes(names(RNA_input), meta_pkn = meta_network)
+
+#Filter inputs and prune the meta_network to only keep nodes that can be found downstream of the inputs
+#The number of step is quite flexible, 7 steps already covers most of the network
+
+n_steps <- 6
+
+# in this step we prune the network to keep only the relevant part between upstream and downstream nodes
+sig_input <- cosmosR:::filter_input_nodes_not_in_pkn(sig_input, meta_network)
+meta_network <- cosmosR:::keep_controllable_neighbours(meta_network, n_steps, names(sig_input))
+metab_input <- cosmosR:::filter_input_nodes_not_in_pkn(metab_input, meta_network)
+meta_network <- cosmosR:::keep_observable_neighbours(meta_network, n_steps, names(metab_input))
+sig_input <- cosmosR:::filter_input_nodes_not_in_pkn(sig_input, meta_network)
+
+meta_network_compressed_list <- compress_same_children(meta_network, sig_input = sig_input, metab_input = metab_input)
+
+meta_network_compressed <- meta_network_compressed_list$compressed_network
+
+node_signatures <- meta_network_compressed_list$node_signatures
+
+duplicated_parents <- meta_network_compressed_list$duplicated_signatures
+
+meta_network_compressed <- meta_network_cleanup(meta_network_compressed)
+
+#In order to adapt options to users specification we can load them into a variable 
+#that will then be passed to preprocess_COSMOS_signaling_to_metabolism CARNIVAL_options parameter
+my_options <- default_CARNIVAL_options(solver = "cplex")
+# my_options <- default_CARNIVAL_options(solver = "cbc")
+#Here the user should provide a path to its CPLEX executable (only cplex at the moment, other solvers will be documented soon !)
+my_options$solverPath <- "cplex_macos/cplex"
+# my_options$solverPath <- "cbc/cbc-osx/cbc"
+my_options$solver <- "cplex"
+# my_options$solver <- "cbc"
+my_options$timelimit <- 3600/10
+my_options$mipGAP <- 0.05
+my_options$threads <- 6
+
+metab_input <- cosmosR:::filter_input_nodes_not_in_pkn(metab_input, meta_network_compressed)
+sig_input <- cosmosR:::filter_input_nodes_not_in_pkn(sig_input, meta_network_compressed)
+
+test_for <- preprocess_COSMOS_signaling_to_metabolism(meta_network = meta_network_compressed,
+                                                      signaling_data = sig_input,
+                                                      metabolic_data = metab_input,
+                                                      diff_expression_data = RNA_input,
+                                                      maximum_network_depth = n_steps,
+                                                      remove_unexpressed_nodes = F,
+                                                      filter_tf_gene_interaction_by_optimization = F,
+                                                      CARNIVAL_options = my_options)
+
+my_options$timelimit <- 3600/10
+
+test_result_for <- run_COSMOS_signaling_to_metabolism(data = test_for,
+                                                      CARNIVAL_options = my_options)
+
+formatted_res <- format_COSMOS_res(test_result_for)
+
+formatted_res <- decompress_solution_network(formatted_res, meta_network, node_signatures, duplicated_parents)
+
+SIF <- formatted_res[[1]]
+ATT <- formatted_res[[2]]
+
+RNA_input_df <- data.frame(Nodes = names(RNA_input), t = RNA_input)
+ATT <- merge(ATT, RNA_input_df, all.x = T)
+
+names(SIF)[3] <- "sign"
+
+write_csv(SIF, file = paste("results/",paste(paste(cell_line,my_options$solver, sep = "_"), "_compressed_SIF.csv",sep = ""), sep = ""))
+write_csv(ATT, file = paste("results/",paste(paste(cell_line,my_options$solver, sep = "_"), "_compressed_ATT.csv",sep = ""), sep = ""))
