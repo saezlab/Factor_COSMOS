@@ -296,6 +296,17 @@ plot_factor(model,
    scale_fill_manual(values=c("1"="red", "2"="cyan", "3"="orange"))
 
 plot_factor(model, 
+                 factors = 4,
+                 color_by = "cluster",
+                 dot_size = 3,
+                 dodge = T,           
+                 legend = T,          
+                 add_violin = T,     
+                 violin_alpha = 0.25) + 
+   scale_color_manual(values=c("1"="red", "2"="cyan", "3"="orange")) +
+   scale_fill_manual(values=c("1"="red", "2"="cyan", "3"="orange"))
+
+plot_factor(model, 
                  factors = 'all',
                  dot_size = 3,
                  dodge = T,           
@@ -308,26 +319,26 @@ Interestingly, with Factor 4, we have a separation of the samples belonging to c
 
 Further, we can inspect the composition of the factors by plotting the top 20 weights per factor and view.
 
-```{r Factor weights per view, fig.height=5, fig.width=5}
+```{r Factor weights per view, fig.height=8, fig.width=5}
 ## Top 20 factor weights per view
 grid.arrange(
   ### RNA
   plot_top_weights(model, 
                    view = "RNA",
                    factor = 4,
-                   nfeatures = 20) +
+                   nfeatures = 10) +
     ggtitle("RNA"),
   ### Proteomics
   plot_top_weights(model, 
                    view = "proteo",
                    factor = 4,
-                   nfeatures = 20) + 
+                   nfeatures = 10) + 
     ggtitle("Proteomics"),
   ### Metabolomics
   plot_top_weights(model, 
                    view = "metab",
                    factor = 4,
-                   nfeatures = 20) + 
+                   nfeatures = 10) + 
     ggtitle("Metabolomics")
 )
 
@@ -374,7 +385,9 @@ Then we load the consensus networks from our databases.
 
 ```{r Load networks, message=FALSE, warning=FALSE, error=FALSE, results='hide'}
 # Load LIANA (receptor and ligand) consensus network
-ligrec_ressource <- distinct(liana::decomplexify(liana::select_resource("Consensus")[[1]]))
+# ligrec_ressource <- distinct(liana::decomplexify(liana::select_resource("Consensus")[[1]]))
+# save(ligrec_ressource, file = "support/ligrec_ressource.RData")
+load(file = "support/ligrec_ressource.RData")
 ligrec_geneset <- ligrec_ressource[,c("source_genesymbol","target_genesymbol")]
 ligrec_geneset$set <- paste(ligrec_geneset$source_genesymbol, ligrec_geneset$target_genesymbol, sep = "___")
 ligrec_geneset <- reshape2::melt(ligrec_geneset, id.vars = "set")[,c(3,1)]
@@ -384,24 +397,23 @@ ligrec_geneset$likelihood <- 1
 ligrec_geneset <- distinct(ligrec_geneset)
 
 # Load Dorothea (TF) network
-dorothea_df <- decoupleR::get_dorothea()
-
-# Load meta footprint analysis (moon) regulatory network 
-moon_regulons <- moon::build_moon_regulons()
+# dorothea_df <- decoupleR::get_collectri()
+# save(dorothea_df, file = "support/dorothea_df.RData")
+load(file = "support/dorothea_df.RData")
 ```
 
 Then, by using decoupleR and prior knowledge networks, we calculate the different regulatory activities inferred by the normalized weighted mean approach. Depending on the task, the minimum number of targets per source varies required to maintain the source in the output (e.g. two targets by definition for ligand-receptor interactions). To calculate activities of master regulons through moon, transcription factor activities estimated by decoupleR and dorothea are used as an input.
 
 ```{r Activity estimations}
 # Calculate regulatory activities from Receptor and Ligand network
-ligrec_high_vs_low <- run_wmean(mat = as.matrix(RNA), network = ligrec_geneset, times = 1000, .source = set, .target = gene, minsize = 2, seed = 42) 
-ligrec_high_vs_low <- ligrec_high_vs_low[ligrec_high_vs_low$statistic == "norm_wmean",]
+ligrec_high_vs_low <- run_ulm(mat = as.matrix(RNA), network = ligrec_geneset, .source = set, .target = gene, minsize = 2) 
+ligrec_high_vs_low <- ligrec_high_vs_low[ligrec_high_vs_low$statistic == "ulm",]
 ligrec_high_vs_low_vector <- ligrec_high_vs_low$score
 names(ligrec_high_vs_low_vector) <- ligrec_high_vs_low$source
 
 # Calculate regulatory activities from TF network
-TF_high_vs_low <- run_wmean(mat = as.matrix(RNA), network = dorothea_df, times = 1000, minsize = 10, seed = 42)
-TF_high_vs_low <- TF_high_vs_low[TF_high_vs_low$statistic == "norm_wmean",]
+TF_high_vs_low <- run_ulm(mat = as.matrix(RNA), network = dorothea_df, minsize = 10)
+TF_high_vs_low <- TF_high_vs_low[TF_high_vs_low$statistic == "ulm",]
 TF_high_vs_low_vector <- TF_high_vs_low$score
 names(TF_high_vs_low_vector) <- TF_high_vs_low$source
 
@@ -409,17 +421,10 @@ names(TF_high_vs_low_vector) <- TF_high_vs_low$source
 TF_high_vs_low <- as.data.frame(TF_high_vs_low[,c(2,4)])
 row.names(TF_high_vs_low) <- TF_high_vs_low[,1]
 
-# Calculate TF regulatory activities from moon network
-moon_high_vs_low <- run_wmean(mat = as.matrix(TF_high_vs_low[,-1,drop = F]), network = moon_regulons, times = 1000, minsize = 10, seed = 42)
-moon_high_vs_low <- moon_high_vs_low[moon_high_vs_low$statistic == "norm_wmean",]
-moon_high_vs_low_vector <- moon_high_vs_low$score
-names(moon_high_vs_low_vector) <- moon_high_vs_low$source
-moon_high_vs_low_vector <- moon_high_vs_low_vector[!(names(moon_high_vs_low_vector) %in% names(TF_high_vs_low_vector))] #exclude all found in TF activity estimation, only keep others to prevent overpresentation
 
 # Combine results
 ligrec_TF_moon_inputs <- list("ligrec" = ligrec_high_vs_low_vector,
-                              "TF" = TF_high_vs_low_vector,
-                              "moon" = moon_high_vs_low_vector)
+                              "TF" = TF_high_vs_low_vector)
 
 save(ligrec_TF_moon_inputs, file = "data/cosmos/ligrec_TF_moon_inputs.Rdata")
 ```
@@ -438,7 +443,6 @@ load(file = "data/cosmos/ligrec_TF_moon_inputs.Rdata")
 
 signaling_input <- ligrec_TF_moon_inputs$TF
 ligrec_input <- ligrec_TF_moon_inputs$ligrec
-moon_input <- ligrec_TF_moon_inputs$moon
 
 RNA_input <- weights$RNA[,4] 
 prot_input <- weights$proteo[,4]
@@ -534,21 +538,6 @@ rec_inputs <- as.numeric(rec_inputs)
 names(rec_inputs) <- receptors
 ```
 
-The same procedure is repeated for the transcription factor master regulator activities.
-
-```{r Plot: mOOn activity estimates}
-## moon
-{plot(density(moon_input))
-abline(v = -0.5)
-abline(v = 1.5)}
-```
-
-Here, only activities higher than 1.5 or lower than -0.5 are kept (see straight lines in plot). Further, only unmentioned entities are kept to complement the receptors.
-
-```{r Filtering mOOn activity estimates}
-moon_input <- moon_input[moon_input > 1.5 | moon_input < -0.5]
-moon_input <- moon_input[!(names(moon_input) %in% names(rec_inputs))]
-```
 
 Finally, the same procedure is repeated for the metabolite factor weights.
 
@@ -580,6 +569,8 @@ Next, the prior knowledge network (PKN) is loaded. To see how the full meta PKN 
 ## Load and filter meta network
 data("meta_network")
 
+meta_network <- meta_network_cleanup(meta_network)
+
 meta_network <- meta_network[!(meta_network$source %in% names(TF_to_remove)) & !(meta_network$target %in% names(TF_to_remove)),]
 meta_network <- meta_network[!(meta_network$source %in% names(metab_to_exclude)) & !(meta_network$target %in% names(metab_to_exclude)),]
 ```
@@ -587,7 +578,7 @@ meta_network <- meta_network[!(meta_network$source %in% names(metab_to_exclude))
 Then the datasets are merged, entries that are not included in the PKN are removed and the filtering steps are completed. The merging in this case is based on the idea of deriving the forward network via the receptor/moon to transcription factor/metabolite direction.
 
 ```{r Merge datasets to input}
-upstream_inputs <- c(rec_inputs,moon_input)
+upstream_inputs <- c(rec_inputs)
 downstream_inputs <- c(metab_inputs, signaling_input)
 
 upstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(upstream_inputs, meta_network)
@@ -602,12 +593,12 @@ At this point, we can perform the COSMOS analysis. Firstly, the options for the 
 ```{r Carnival options pre-run 1}
 ## Set CARNIVAL options to solve pre-optimization problem
 my_options <- default_CARNIVAL_options(solver = "cplex")
-my_options$solverPath <- "/Applications/CPLEX_Studio221/cplex/bin/x86-64_osx/cplex"
+my_options$solverPath <- "cplex_macos/cplex"
 my_options$solver <- "cplex"
 my_options$mipGAP <- 0.05
 my_options$threads <- 2
 my_options$timelimit <- 360
-my_options$limitPop <- 1000
+my_options$limitPop <- 100
 ```
 
 Here, we are trying to find the "forward" network causally connecting the signaling data to metabolic data by using Carnival's ILP solution and the PKN. To further simplify the prior knowledge network (and perform checks on the input data), the pre-processing function of COSMOS is used. Details about the options can be found in the documentation as well as in the [COSMOS tutorial](https://saezlab.github.io/cosmosR/articles/tutorial.html).
@@ -619,7 +610,7 @@ pre_run_rec_to_TF <- preprocess_COSMOS_signaling_to_metabolism(meta_network = me
                                                                diff_expression_data = RNA_input,
                                                                maximum_network_depth = 4,
                                                                remove_unexpressed_nodes = T,
-                                                               filter_tf_gene_interaction_by_optimization = T,
+                                                               filter_tf_gene_interaction_by_optimization = F,
                                                                CARNIVAL_options = my_options)
 ```
 
@@ -628,9 +619,9 @@ In this part, we can set up the options for the optimization run. The running ti
 ```{r Carnival options run 1}
 ## Set CARNIVAL options to solve optimization problem
 my_options$mipGAP <- 0.05
-my_options$threads <- 2
+my_options$threads <- 6
 my_options$timelimit <- 720
-my_options$limitPop <- 1000
+my_options$limitPop <- 100
 ```
 
 After pre-optimization, we can perform the actual COSMOS run using the pre-optimized solution.
@@ -679,8 +670,8 @@ names(lig_inputs) <- ligands
 Then the datasets are merged appropriately, entries that are not included in the PKN are removed and the filtering steps are completed.
 
 ```{r Combine inputs}
-upstream_inputs <- c(signaling_input, moon_input)
-downstream_inputs <- c(lig_inputs)
+upstream_inputs <- c(signaling_input)
+downstream_inputs <- c(lig_inputs, metab_inputs*10) #factor 10 to scale up the metabs to the ulm scores
 
 upstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(upstream_inputs, meta_network)
 downstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(downstream_inputs, meta_network)
@@ -692,9 +683,9 @@ save(TF_to_lig_cosmos_input, file = "data/cosmos/TF_to_lig_cosmos_input.Rdata")
 ```{r Carnival options pre-run 2}
 ## Set CARNIVAL options to solve optimization problem
 my_options$mipGAP <- 0.05
-my_options$threads <- 2
+my_options$threads <- 6
 my_options$timelimit <- 360
-my_options$limitPop <- 1000
+my_options$limitPop <- 100
 ```
 
 After setting the variables for the CPLEX solver, we can perform the pre-optimization run ...
@@ -704,9 +695,9 @@ pre_run_TF_to_lig <- preprocess_COSMOS_signaling_to_metabolism(meta_network = me
                                                                signaling_data = upstream_inputs_filtered,
                                                                metabolic_data = downstream_inputs_filtered,
                                                                diff_expression_data = RNA_input,
-                                                               maximum_network_depth = 4,
+                                                               maximum_network_depth = 5,
                                                                remove_unexpressed_nodes = T,
-                                                               filter_tf_gene_interaction_by_optimization = T,
+                                                               filter_tf_gene_interaction_by_optimization = F,
                                                                CARNIVAL_options = my_options)
 ```
 
@@ -715,9 +706,9 @@ pre_run_TF_to_lig <- preprocess_COSMOS_signaling_to_metabolism(meta_network = me
 ```{r Carnival options run 2}
 ## Set CARNIVAL options to solve optimization problem
 my_options$mipGAP <- 0.05
-my_options$threads <- 4
+my_options$threads <- 6
 my_options$timelimit <- 720
-my_options$limitPop <- 1000
+my_options$limitPop <- 100
 ```
 
 ... and perform the optimization.
@@ -725,7 +716,8 @@ my_options$limitPop <- 1000
 ```{r COSMOS run forward network 2, eval=FALSE}
 run_TF_to_lig <- run_COSMOS_signaling_to_metabolism(data = pre_run_TF_to_lig,
                                                     CARNIVAL_options = my_options)
-
+data("HMDB_mapper_vec")
+run_TF_to_lig <- cosmosR::format_COSMOS_res(run_TF_to_lig, metab_mapping = HMDB_mapper_vec)
 save(run_TF_to_lig, file = "results/cosmos/run_TF_to_lig.Rdata")
 ```
 
@@ -734,10 +726,12 @@ Again, we extract the information from the determined network and filter out ina
 ```{r Processing COSMOS output 2}
 load("results/cosmos/run_TF_to_lig.Rdata")
 
-SIF_TF_to_lig <- as.data.frame(run_TF_to_lig$weightedSIF)
+
+SIF_TF_to_lig <- as.data.frame(run_TF_to_lig[[1]])
 SIF_TF_to_lig <- SIF_TF_to_lig[which(SIF_TF_to_lig$Weight != 0),]
 
-ATT_TF_to_lig <- as.data.frame(run_TF_to_lig$nodesAttributes)
+
+ATT_TF_to_lig <- as.data.frame(run_TF_to_lig[[2]])
 colnames(ATT_TF_to_lig)[1] <- "Nodes"
 ATT_TF_to_lig$measured <- ifelse(ATT_TF_to_lig$NodeType %in% c("M","T","S","P"),1,0)
 ATT_TF_to_lig$Activity <- ATT_TF_to_lig$AvgAct
@@ -798,13 +792,10 @@ names(TF_weights) <- gsub("_TF","",names(TF_weights))
 TF_weights <- TF_weights[!(names(TF_weights) %in% c(rec_weights$Nodes,lig_weights$Nodes))]
 TF_weights <- data.frame(Nodes = names(TF_weights), feature_weights = TF_weights)
 
-## mOOn
-moon_weights <- ligrec_TF_moon_inputs$moon
-moon_weights <- moon_weights[!(names(moon_weights) %in% c(rec_weights$Nodes,TF_weights$Nodes, lig_weights$Nodes))]
-moon_weights <- data.frame(Nodes = names(moon_weights), feature_weights = moon_weights)
+
 
 ## Combine
-feature_weights <- as.data.frame(rbind(TF_weights, rec_weights, lig_weights, moon_weights))
+feature_weights <- as.data.frame(rbind(TF_weights, rec_weights, lig_weights))
 
 ## Add weights to data
 combined_ATT <- merge(combined_ATT, MOFA_weights, all.x = T)
@@ -815,7 +806,7 @@ To identify whether a node is a ligand, receptor, TF or master regulator, we fir
 
 ```{r Load consensus}
 # LIANA
-ligrec_ressource <- distinct(liana::decomplexify(liana::select_resource("Consensus")[[1]]))
+load("support/ligrec_ressource.RData")
 ligrec_df <- ligrec_ressource[,c("source_genesymbol","target_genesymbol")]
 ligrec_df <- distinct(ligrec_df)
 names(ligrec_df) <- c("Node1","Node2")
@@ -828,18 +819,14 @@ ligrec_df$Weight <- 1
 ligrec_df <- ligrec_df[ligrec_df$Node1 %in% combined_ATT$Nodes & ligrec_df$Node2 %in% combined_ATT$Nodes, ]
 
 # Load Dorothea (TF) network
-dorothea_df <- decoupleR::get_dorothea()
+load("support/dorothea_df.RData")
 dorothea_df <- dorothea_df[dorothea_df$source %in% combined_ATT$Nodes,]
-
-# Load meta footprint analysis (moon) regulatory network 
-moon_regulons <- moon::build_moon_regulons()
-moon_regulons <- moon_regulons[moon_regulons$source %in% combined_ATT$Nodes,]
 ```
 
 Then, we add the information to the network (ligand = 2, receptor = 3, transcription factor = 4, master regulator = 5, other = 1, no NodeType available = 0).
 
 ```{r Set NodeType}
-combined_ATT$NodeType <- ifelse(combined_ATT$Nodes %in% ligrec_df$Node1, 2, ifelse(combined_ATT$Nodes %in% ligrec_df$Node2, 3, ifelse(combined_ATT$Nodes %in% dorothea_df$source, 4, ifelse(combined_ATT$Nodes %in% moon_regulons$source, 5, combined_ATT$NodeType)))) #if node is a ligand set NodeType to 2, if node is a receptor set NodeType to 3, if node is a TF set NodeType to 4, if node is a master regulator set NodeType to 5, else keep 0 or 1
+combined_ATT$NodeType <- ifelse(combined_ATT$Nodes %in% ligrec_df$Node1, 2, ifelse(combined_ATT$Nodes %in% ligrec_df$Node2, 3, ifelse(combined_ATT$Nodes %in% dorothea_df$source, 4, combined_ATT$NodeType))) #if node is a ligand set NodeType to 2, if node is a receptor set NodeType to 3, if node is a TF set NodeType to 4, if node is a master regulator set NodeType to 5, else keep 0 or 1
 
 write_csv(combined_ATT, file = "results/cosmos/ATT_mofamoon_combined.csv")
 ```

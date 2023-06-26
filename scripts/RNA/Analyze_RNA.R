@@ -29,14 +29,13 @@ RNA_metadata <- read_csv(file = "data/metadata/RNA_metadata.csv")
 
 # TF clustering with normalized weighted mean approach (dorothea + decoupleR)
 ## First load ressource
-dorothea_df <- decoupleR::get_dorothea(levels = c("A","B","C"))
-
+dorothea_df <- decoupleR::get_collectri()
 ## Calculate TF activities per cell line
 TF_activity <- apply(RNA,2,function(x){
   x <- as.data.frame(x[which(!is.na(x))])
-  TFs <- run_wmean(as.matrix(x), network = dorothea_df, times = 1000, minsize = 20)
+  TFs <- run_ulm(as.matrix(x), network = dorothea_df, minsize = 20)
   TFs <- as.data.frame(TFs)
-  TFs <- TFs[which(TFs$statistic == "norm_wmean"),c(2,4)]
+  TFs <- TFs[which(TFs$statistic == "ulm"),c(2,4)]
   as_input <- TFs[,2]
   names(as_input) <- TFs[,1]
   return(as_input)
@@ -48,14 +47,18 @@ TF_activity_df <- data.frame(t(data.table::rbindlist(
   fill = TRUE)))
 colnames(TF_activity_df) <- names(TF_activity)
 
-## Scale the TF activities 
-SDs <- apply(TF_activity_df,1,function(x){sd(x,na.rm = T)})
-means <- rowMeans(TF_activity_df, na.rm = T)
-TF_activity_scaled_df <- (TF_activity_df - means) / SDs
+# ## Scale the TF activities (obsolete)
+# SDs <- apply(TF_activity_df,1,function(x){sd(x,na.rm = T)})
+# means <- rowMeans(TF_activity_df, na.rm = T)
+# TF_activity_scaled_df <- (TF_activity_df - means) / SDs
+# 
 
-## Convert values to ranks (from lowest to highest activity) with only complete cases
-TF_activity_scaledrank_df <- as.data.frame(apply(TF_activity_scaled_df[complete.cases(TF_activity_scaled_df),], 2, base::rank))
+#We don't scale the TF themeselves since the RNA is already scaled
+TF_activity_scaled_df <- TF_activity_df
 
+# ## Convert values to ranks (from lowest to highest activity) with only complete cases
+TF_activity_scaledrank_df <- as.data.frame(apply(TF_activity_df[complete.cases(TF_activity_df),], 2, base::rank))
+# 
 ## Visualize correlation of TFs between different cell lines
 TF_activity_scaledrank_df_corr <- TF_activity_scaledrank_df %>%
   as.matrix %>%
@@ -70,7 +73,7 @@ TF_activity_scaledrank_df_corr <- TF_activity_scaledrank_df_corr[,-1]
 pheatmap(TF_activity_scaledrank_df_corr)
 
 ## Determine optimal number of clusters
-df <- as.data.frame(t(TF_activity_scaledrank_df))
+df <- as.data.frame(t(TF_activity_df[complete.cases(TF_activity_df),]))
 ### Silhouette method
 fviz_nbclust(df, kmeans, method = "silhouette", k.max = 10)+
   labs(title="") +
@@ -147,11 +150,11 @@ for(i in c(3,4,6,9)) {
                                    show_colnames = F,
                                    fontfamily = "Times New Roman",
                                    fontsize = 12, 
-                                   color = colorRampPalette(rev(brewer.pal(n = 7, name = "RdBu")))(100),
+                                   color = colorRampPalette(rev(RColorBrewer::brewer.pal(n = 7, name = "RdBu")))(100),
                                    breaks = seq(-4,4,8/100))
   
   ## Compare average of TF values per cluster
-  compare_means(value ~ Cluster,
+  ggpubr::compare_means(value ~ Cluster,
                 merge(cbind(pivot_longer(TF_activity_scaled_df,
                                          cols = colnames(TF_activity_scaled_df),
                                          names_to = "sample",
@@ -202,9 +205,9 @@ for(i in c(3,4,6,9)) {
                                           fontfamily = "Times New Roman",
                                           fontsize = 12,
                                           angle_col = 0,
-                                          color = colorRampPalette(rev(brewer.pal(n = 7, name = "RdBu")))(100))
+                                          color = colorRampPalette(rev(RColorBrewer::brewer.pal(n = 7, name = "RdBu")))(100))
   
-  compare_means(value ~ Cluster,
+  ggpubr::compare_means(value ~ Cluster,
                 pivot_longer(TF_activity_cluster_avgNES_reduced[[i]],
                              cols=colnames(TF_activity_cluster_avgNES_reduced[[i]]),
                              values_to = "value", 
