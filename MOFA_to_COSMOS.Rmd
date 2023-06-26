@@ -411,6 +411,11 @@ ligrec_high_vs_low <- ligrec_high_vs_low[ligrec_high_vs_low$statistic == "ulm",]
 ligrec_high_vs_low_vector <- ligrec_high_vs_low$score
 names(ligrec_high_vs_low_vector) <- ligrec_high_vs_low$source
 
+ligrec_high_vs_low_top <- ligrec_high_vs_low[order(abs(ligrec_high_vs_low$score),decreasing = T)[1:15],c(2,4)]
+ligrec_high_vs_low_top$source <- factor(ligrec_high_vs_low_top$source, levels = ligrec_high_vs_low_top$source)
+ggplot(ligrec_high_vs_low_top, aes(x=source, y = score)) + geom_bar(stat= "identity",position = "dodge") + theme_minimal() + theme(axis.text.x = element_text(angle = 315, vjust = 0.5, hjust=0))
+
+
 # Calculate regulatory activities from TF network
 TF_high_vs_low <- run_ulm(mat = as.matrix(RNA), network = dorothea_df, minsize = 10)
 TF_high_vs_low <- TF_high_vs_low[TF_high_vs_low$statistic == "ulm",]
@@ -421,6 +426,9 @@ names(TF_high_vs_low_vector) <- TF_high_vs_low$source
 TF_high_vs_low <- as.data.frame(TF_high_vs_low[,c(2,4)])
 row.names(TF_high_vs_low) <- TF_high_vs_low[,1]
 
+TF_high_vs_low_top_10 <- TF_high_vs_low[order(abs(TF_high_vs_low$score), decreasing = T)[1:10],]
+TF_high_vs_low_top_10$source <- factor(TF_high_vs_low_top_10$source, levels = TF_high_vs_low_top_10$source)
+ggplot(TF_high_vs_low_top_10, aes(x=source, y = score)) + geom_bar(stat= "identity",position = "dodge") + theme_minimal()
 
 # Combine results
 ligrec_TF_moon_inputs <- list("ligrec" = ligrec_high_vs_low_vector,
