@@ -75,7 +75,8 @@ Then we can further select only nodes from the MAPK signaling pathway.
 ```{r Select MAPK pathway nodes}
 ## Select nodes from subnetwork EGF_EGFR_RAS_ERK_pathway
 
-interesting_nodes <- data.frame("name" = c("CCNA2","EGFR", "FOS", "HRAS",  "JUN", "MAP2K1", "MAP2K2", "MAPK1", "MAPK3", "MYC",  "NFKB1", "PCNA", "RAF1", "STAT3", "TGFB1", "THBS1", "VEGFA"))
+# interesting_nodes <- data.frame("name" = c("CCNA2","EGFR", "FOS", "HRAS",  "JUN", "MAP2K1", "MAP2K2", "MAPK1", "MAPK3", "MYC",  "NFKB1", "PCNA", "RAF1", "STAT3", "TGFB1", "THBS1", "VEGFA"))
+interesting_nodes <- data.frame("name" = c("VEGFA","HIF1A","PRKCA","BNIP3","DAG1","ACO1","JAK1","ABL1","ITGB1","STAT1","PRKACA","MYC"))
 nodes_cellline_weight_filtered <- nodes_cellline_weight[rownames(nodes_cellline_weight) %in% interesting_nodes$name,]
 ```
 
@@ -87,18 +88,22 @@ tissue_origin_cluster <- as.data.frame(RNA_metadata_cluster[,c(2,3)]) #:2,8
 colnames(tissue_origin_cluster) <- c("cluster","Tissue") #", , "histology")
 rownames(tissue_origin_cluster) <- RNA_metadata_cluster[,1]
 tissue_origin_cluster$Tissue <- as.character(tissue_origin_cluster$Tissue)
-tissue_origin_cluster$cluster <- as.character(tissue_origin_cluster$cluster)
+
+tissue_origin_cluster <- tissue_origin_cluster[,-1,drop = F]
+# tissue_origin_cluster$cluster <- as.character(tissue_origin_cluster$cluster)
 ```
 
 To visualize the results, heatmaps are shown.
 
-```{r Visualization transcriptomics}
+```{r Visualization transcriptomics, fig.width = 12, fig.height = 4}
 var1 <- rev(brewer.pal(9, "Set1"))
 names(var1) <- unique(tissue_origin_cluster$Tissue)
-var2 <- c("red","cyan","orange")
-names(var2) <- unique(tissue_origin_cluster$cluster)[order(unique(tissue_origin_cluster$cluster))]
-anno_colors <- list(Tissue=var1,
-                    cluster=var2)
+# var2 <- c("red","cyan","orange")
+# names(var2) <- unique(tissue_origin_cluster$cluster)[order(unique(tissue_origin_cluster$cluster))]
+# anno_colors <- list(Tissue=var1,
+#                     cluster=var2)
+anno_colors <- list(Tissue=var1)
+
 
 pheatmap(nodes_cellline_weight, 
          display_numbers = F, 
@@ -111,6 +116,14 @@ pheatmap(nodes_cellline_weight_filtered,
          display_numbers = F,
          annotation_col = tissue_origin_cluster, 
          annotation_colors =  anno_colors)
+
+
+```
+```{r , , fig.width = 4.3, fig.height = 3.5}
+pheatmap(nodes_cellline_weight_filtered[,c("MOLT-4","SF-539")], 
+         display_numbers = F,
+         annotation_col = tissue_origin_cluster, 
+         annotation_colors =  anno_colors, cluster_cols = F)
 ```
 
 Since, we are also interested in comparing the two cell lines with the most differing features, we use the MOFA factor values to determine these by calculating the highest difference.
@@ -175,7 +188,8 @@ Further, we can use the cell-line specific transcriptomic values to calculate ce
 ### LIANA, mOOn, Dorothea
 
 # Load LIANA (receptor and ligand) consensus network
-ligrec_ressource <- distinct(liana::decomplexify(liana::select_resource("Consensus")[[1]]))
+# ligrec_ressource <- distinct(liana::decomplexify(liana::select_resource("Consensus")[[1]]))
+load("support/ligrec_ressource.RData")
 ligrec_geneset <- ligrec_ressource[,c("source_genesymbol","target_genesymbol")]
 ligrec_geneset$set <- paste(ligrec_geneset$source_genesymbol, ligrec_geneset$target_genesymbol, sep = "___")
 ligrec_geneset <- reshape2::melt(ligrec_geneset, id.vars = "set")[,c(3,1)]
@@ -185,14 +199,10 @@ ligrec_geneset$likelihood <- 1
 ligrec_geneset <- distinct(ligrec_geneset)
 
 # Load Dorothea (TF) network
-dorothea_df <- decoupleR::get_dorothea()
-
-# Load meta footprint analysis (moon) regulatory network 
-moon_regulons <- moon::build_moon_regulons()
+load("support/dorothea_df.RData")
 
 
 lig_rec_scores <- list()
-moon_scores <- list()
 dorothea_scores <- list()
 
 for(i in unique(RNA_weight_cell_line$sample)) {
@@ -207,8 +217,8 @@ for(i in unique(RNA_weight_cell_line$sample)) {
   RNA_sample <- RNA_sample[!is.na(RNA_sample)]
   
   # Calculate regulatory activities from Receptor and Ligand network
-  ligrec_high_vs_low <- run_wmean(mat = as.matrix(RNA_sample), network = ligrec_geneset, times = 1000, .source = set, .target = gene, minsize = 2, seed = 42) 
-  ligrec_high_vs_low <- ligrec_high_vs_low[ligrec_high_vs_low$statistic == "norm_wmean",]
+  ligrec_high_vs_low <- run_ulm(mat = as.matrix(RNA_sample), network = ligrec_geneset, .source = set, .target = gene, minsize = 2) 
+  ligrec_high_vs_low <- ligrec_high_vs_low[ligrec_high_vs_low$statistic == "ulm",]
   ligrec_high_vs_low_vector <- ligrec_high_vs_low$score
   names(ligrec_high_vs_low_vector) <- ligrec_high_vs_low$source
   
@@ -231,8 +241,8 @@ for(i in unique(RNA_weight_cell_line$sample)) {
   lig_rec_scores[[i]] <- c(lig_rec_scores[[i]],lig_inputs)
   
   # Calculate regulatory activities from TF network
-  TF_high_vs_low <- run_wmean(mat = as.matrix(RNA_sample), network = dorothea_df, times = 1000, minsize = 10, seed = 42)
-  TF_high_vs_low <- TF_high_vs_low[TF_high_vs_low$statistic == "norm_wmean",]
+  TF_high_vs_low <- run_ulm(mat = as.matrix(RNA_sample), network = dorothea_df, minsize = 10)
+  TF_high_vs_low <- TF_high_vs_low[TF_high_vs_low$statistic == "ulm",]
   TF_high_vs_low_vector <- TF_high_vs_low$score
   names(TF_high_vs_low_vector) <- TF_high_vs_low$source
   
@@ -242,14 +252,6 @@ for(i in unique(RNA_weight_cell_line$sample)) {
   TF_high_vs_low <- as.data.frame(TF_high_vs_low[,c(2,4)])
   row.names(TF_high_vs_low) <- TF_high_vs_low[,1]
   
-  # Calculate TF regulatory activities from moon network
-  moon_high_vs_low <- run_wmean(mat = as.matrix(TF_high_vs_low[,-1,drop = F]), network = moon_regulons, times = 1000, minsize = 10, seed = 42)
-  moon_high_vs_low <- moon_high_vs_low[moon_high_vs_low$statistic == "norm_wmean",]
-  moon_high_vs_low_vector <- moon_high_vs_low$score
-  names(moon_high_vs_low_vector) <- moon_high_vs_low$source
-  moon_high_vs_low_vector <- moon_high_vs_low_vector[!(names(moon_high_vs_low_vector) %in% names(TF_high_vs_low_vector))] #exclude all found in TF activity estimation, only keep others to prevent overrepresentation
-
-  moon_scores[[i]] <- moon_high_vs_low_vector
 }
 ```
 
@@ -270,16 +272,10 @@ dorothea_scores_df <- data.frame(t(data.table::rbindlist(
 colnames(dorothea_scores_df) <- names(dorothea_scores)
 dorothea_scores_filtered_df <- dorothea_scores_df[rownames(dorothea_scores_df) %in% interesting_nodes$name,]
 
-moon_scores_df <- data.frame(t(data.table::rbindlist(
-  lapply(moon_scores, function(x) data.table::data.table(t(x))),
-  fill = TRUE)))
-colnames(moon_scores_df) <- names(moon_scores)
-moon_scores_filtered_df <- moon_scores_df[rownames(moon_scores_df) %in% interesting_nodes$name,]
-
 ## Create dataframe with activity scores
-activity_scores <- rbind(lig_rec_scores_filtered_df,dorothea_scores_filtered_df[!(rownames(dorothea_scores_filtered_df) %in%  rownames(lig_rec_scores_filtered_df)),], moon_scores_filtered_df[!(rownames(moon_scores_filtered_df) %in% c(rownames(dorothea_scores_filtered_df), rownames(lig_rec_scores_filtered_df))),])
+activity_scores <- rbind(lig_rec_scores_filtered_df,dorothea_scores_filtered_df[!(rownames(dorothea_scores_filtered_df) %in%  rownames(lig_rec_scores_filtered_df)),])
 
-all_activity_scores <- rbind(lig_rec_scores_df,dorothea_scores_df[!(rownames(dorothea_scores_df) %in% rownames(lig_rec_scores_df)),], moon_scores_df[!(rownames(moon_scores_df) %in% c(rownames(dorothea_scores_df), rownames(lig_rec_scores_df))),])
+all_activity_scores <- rbind(lig_rec_scores_df,dorothea_scores_df[!(rownames(dorothea_scores_df) %in% rownames(lig_rec_scores_df)),])
 
 activity_scores <- cbind(rownames(activity_scores),activity_scores)
 write_csv(activity_scores, file = "data/mofa/activity_scores.csv")
