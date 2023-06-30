@@ -367,9 +367,9 @@ plot_data_heatmap(model,
 
 Further tools to investigate the latent factors are available inside the MOFA framework ([MOFA+: downstream analysis (in R)](https://raw.githack.com/bioFAM/MOFA2_tutorials/master/R_tutorials/downstream_analysis.html)).
 
-### From MOFA output to TF activity, ligand-receptor activity and mOOn estimation
+### From MOFA output to TF activity, ligand-receptor activity
 
-In the next step, using the weights of Factor 4 (highest shared $R^2$ across views), different databases (liana, dorothea, moon) and decoupleR, the transcription factor activities, ligand-receptor activities as well as the activity of the master regulators are calculated.
+In the next step, using the weights of Factor 4 (highest shared $R^2$ across views), different databases (liana and dorothea) and decoupleR, the transcription factor activities, ligand-receptor scores are estimated.
 
 First, we have to extract the weights from our MOFA model and keep the weights from Factor 4 in the RNA view.
 
@@ -437,7 +437,7 @@ ligrec_TF_moon_inputs <- list("ligrec" = ligrec_high_vs_low_vector,
 save(ligrec_TF_moon_inputs, file = "data/cosmos/ligrec_TF_moon_inputs.Rdata")
 ```
 
-We have now successfully used the MOFA weights (Factor 4, RNA view) to infer not only TF activities but also the activities of master regulators and ligand-receptor interactions.
+We have now successfully used the MOFA weights (Factor 4, RNA view) to infer not only TF activities but also the ligand-receptor interactions.
 
 ### Extracting network with COSMOS to formulate mechanistic hypotheses
 
@@ -583,7 +583,7 @@ meta_network <- meta_network[!(meta_network$source %in% names(TF_to_remove)) & !
 meta_network <- meta_network[!(meta_network$source %in% names(metab_to_exclude)) & !(meta_network$target %in% names(metab_to_exclude)),]
 ```
 
-Then the datasets are merged, entries that are not included in the PKN are removed and the filtering steps are completed. The merging in this case is based on the idea of deriving the forward network via the receptor/moon to transcription factor/metabolite direction.
+Then the datasets are merged, entries that are not included in the PKN are removed and the filtering steps are completed. The merging in this case is based on the idea of deriving the forward network via the receptor to transcription factor/metabolite direction.
 
 ```{r Merge datasets to input}
 upstream_inputs <- c(rec_inputs)
@@ -810,7 +810,7 @@ combined_ATT <- merge(combined_ATT, MOFA_weights, all.x = T)
 combined_ATT <- merge(combined_ATT, feature_weights, all.x = T)
 ```
 
-To identify whether a node is a ligand, receptor, TF or master regulator, we first load the consensus PKNs and only keep entries which represent an interaction in our network.
+To identify whether a node is a ligand, receptor or TFr, we first load the consensus PKNs and only keep entries which represent an interaction in our network.
 
 ```{r Load consensus}
 # LIANA
@@ -831,10 +831,10 @@ load("support/dorothea_df.RData")
 dorothea_df <- dorothea_df[dorothea_df$source %in% combined_ATT$Nodes,]
 ```
 
-Then, we add the information to the network (ligand = 2, receptor = 3, transcription factor = 4, master regulator = 5, other = 1, no NodeType available = 0).
+Then, we add the information to the network (ligand = 2, receptor = 3, transcription factor = 4, other = 1, no NodeType available = 0).
 
 ```{r Set NodeType}
-combined_ATT$NodeType <- ifelse(combined_ATT$Nodes %in% ligrec_df$Node1, 2, ifelse(combined_ATT$Nodes %in% ligrec_df$Node2, 3, ifelse(combined_ATT$Nodes %in% dorothea_df$source, 4, combined_ATT$NodeType))) #if node is a ligand set NodeType to 2, if node is a receptor set NodeType to 3, if node is a TF set NodeType to 4, if node is a master regulator set NodeType to 5, else keep 0 or 1
+combined_ATT$NodeType <- ifelse(combined_ATT$Nodes %in% ligrec_df$Node1, 2, ifelse(combined_ATT$Nodes %in% ligrec_df$Node2, 3, ifelse(combined_ATT$Nodes %in% dorothea_df$source, 4, combined_ATT$NodeType))) #if node is a ligand set NodeType to 2, if node is a receptor set NodeType to 3, if node is a TF set NodeType to 4, else keep 0 or 1
 
 write_csv(combined_ATT, file = "results/cosmos/ATT_mofamoon_combined.csv")
 ```

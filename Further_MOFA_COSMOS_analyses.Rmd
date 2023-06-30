@@ -70,12 +70,13 @@ rownames(nodes_cellline_weight) <- nodes_cellline_weight$feature
 nodes_cellline_weight <- nodes_cellline_weight[,-1]
 ```
 
-Then we can further select only nodes from the MAPK signaling pathway.
+Then we can further select a subset of nodes to focus on, here we select 
+interesting nodes that are well representing transcriptional regulations (e.g. 
+HIF1A, MYC, STAT1), PTM regulations (e.g. JAK1, ABL1), ligand-receptor
+interactions (e.g. VEGFA-ITGB1) and metabolic regulations (e.g. ACO1 and citrate).
 
 ```{r Select MAPK pathway nodes}
-## Select nodes from subnetwork EGF_EGFR_RAS_ERK_pathway
-
-# interesting_nodes <- data.frame("name" = c("CCNA2","EGFR", "FOS", "HRAS",  "JUN", "MAP2K1", "MAP2K2", "MAPK1", "MAPK3", "MYC",  "NFKB1", "PCNA", "RAF1", "STAT3", "TGFB1", "THBS1", "VEGFA"))
+## Select nodes 
 interesting_nodes <- data.frame("name" = c("VEGFA","HIF1A","PRKCA","BNIP3","DAG1","ACO1","JAK1","ABL1","ITGB1","STAT1","PRKACA","MYC"))
 nodes_cellline_weight_filtered <- nodes_cellline_weight[rownames(nodes_cellline_weight) %in% interesting_nodes$name,]
 ```
@@ -168,7 +169,7 @@ plot_factor(model,
         axis.title.x = element_text(family = "Times New Roman"), axis.title.y = element_text(family = "Times New Roman"), axis.text = element_text(family = "Times New Roman"), legend.text = element_text(family = "Times New Roman"), legend.title = element_text(family = "Times New Roman"))
 ```
 
-Let's focus on the MAPK signaling pathway values for these cell lines.
+Let's focus on the interesting node values for these cell lines.
 
 ```{r Visualization transcriptomics most distant cell line}
 pheatmap(nodes_cellline_weight_filtered[,max_cell_lines], 
