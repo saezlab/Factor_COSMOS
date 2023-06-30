@@ -3,6 +3,8 @@ library(ocean)
 library(reshape2)
 library(readr)
 
+source("scripts/translate_res.R")
+
 data("meta_network")
 
 meta_network <- meta_network_cleanup(meta_network)
@@ -23,6 +25,8 @@ metab_input <- prepare_metab_inputs(metab_input, c("c","m"))
 ##Filter significant inputs
 sig_input <- sig_input[abs(sig_input) > 2]
 # metab_input <- metab_input[abs(metab_input) > 2]
+
+#make sure the sig_input is a named vector
 
 #Remove genes that are not expressed from the meta_network
 meta_network <- cosmosR:::filter_pkn_expressed_genes(names(RNA_input), meta_pkn = meta_network)
@@ -62,7 +66,8 @@ while (before != after & i < 10) {
                                                  downstream_input = metab_input, 
                                                  meta_network = meta_network_TF_to_metab, 
                                                  n_layers = n_steps, 
-                                                 n_perm = 100) # 1000 is better for definitive results
+                                                 n_perm = 100, 
+                                                 statistic = "wmean") # 1000 is better for definitive results
   
   meta_network_TF_to_metab <- filter_incohrent_TF_target(recursive_decoupleRnival_res, dorothea_reg, meta_network_TF_to_metab, RNA_input)
   after <- length(meta_network_TF_to_metab[,1])
@@ -100,7 +105,7 @@ abline(v = -1)
 
 solution_network <- reduce_solution_network(decoupleRnival_res = recursive_decoupleRnival_res, 
                                             meta_network = meta_network,
-                                            cutoff = 1.5, 
+                                            cutoff = 1, 
                                             upstream_input = sig_input, 
                                             RNA_input = RNA_input, 
                                             n_steps = n_steps)
