@@ -215,6 +215,10 @@ write_MOFA_options_file <- function(input_file,
 }
 ```
 
+Do not run this chunk, unless you want to repeat the mofa optimisation, because
+it takes a lot of time ot run. The results are already available in the 
+results/mofa folder.
+
 ```{r MOFA run, eval=FALSE}
 for(i in c(5:15,20,length(unique(mofa_ready_data$sample)))){
 wd <- getwd()
@@ -227,7 +231,7 @@ system(paste0(paste('python3', wd, sep = " "), paste('/scripts/mofa/mofa2.py', "
 
 We first load the different MOFA models containing the MOFA results together with the metadata information.
 
-```{r Loading MOFA output, message=FALSE}
+```{r Loading MOFA output, message=FALSE, warning=F}
 # Load MOFA output
 for(i in c(5:15,20,length(unique(mofa_ready_data$sample)))){
   filepath <- paste0('results/mofa/mofa_res_',i,'factor.hdf5')
@@ -317,7 +321,7 @@ plot_factor(model,
 
 Interestingly, with Factor 4, we have a separation of the samples belonging to cluster 2 from samples of cluster 1 and 3. Taking into account that this factor mainly explains the variation in the RNA view, the samples are classifiable into the clusters especially by transcriptomics. This is expected since the assignment of the samples was done based on transcription factor clustering via transcriptomics. Thus, it was shown that the original structure of the data was conserved in the low-dimensional representation via factors.
 
-Further, we can inspect the composition of the factors by plotting the top 20 weights per factor and view.
+Further, we can inspect the composition of the factors by plotting the top 10 weights per factor and view.
 
 ```{r Factor weights per view, fig.height=8, fig.width=5}
 ## Top 20 factor weights per view
@@ -346,7 +350,7 @@ grid.arrange(
 
 Using this visualization, features with strong association with the factor (large absolute values) can be easily identified and further inspected by literature investigation.
 
-Moreover, we can use heatmaps to highlight the coordinated heterogeneity that MOFA captures in the original data and define clusters by hierarchical clustering. Here, for example, the heatmap for Factor 4 of the RNA view using the top 100 feature is shown and hierarchical clustering with complete linkage is performed. Additionally, the cluster assignment of each sample is depicted.
+Moreover, we can use heatmaps to highlight the coordinated heterogeneity that MOFA captures in the original data and define clusters by hierarchical clustering. Here, for example, the heatmap for Factor 4 of the RNA view using the top 25 feature is shown and hierarchical clustering with complete linkage is performed. Additionally, the cluster assignment of each sample is depicted.
 
 ```{r Heatmap RNA view factor 2}
 anno_colors <- list(
@@ -358,7 +362,7 @@ model@samples_metadata$cluster <- as.character(model@samples_metadata$cluster)
 plot_data_heatmap(model,
                   view = "RNA",       
                   factor = 4,             
-                  features = 100,          
+                  features =25,          
                   cluster_rows = T, cluster_cols = T,
                   show_rownames = T, show_colnames = F,
                   annotation_samples = "cluster",
@@ -573,7 +577,7 @@ metab_inputs <- metab_inputs[abs(metab_inputs) > 0.2]
 
 Next, the prior knowledge network (PKN) is loaded. To see how the full meta PKN was assembled, see [PKN](https://github.com/saezlab/meta_PKN_BIGG.git). Since we are not interested in including transcription factors and metabolites that were previously filtered out, we also remove the respective nodes from the PKN.
 
-```{r Meta network}
+```{r Meta network, warning=F}
 ## Load and filter meta network
 data("meta_network")
 
@@ -587,7 +591,7 @@ Then the datasets are merged, entries that are not included in the PKN are remov
 
 ```{r Merge datasets to input}
 upstream_inputs <- c(rec_inputs)
-downstream_inputs <- c(metab_inputs, signaling_input)
+downstream_inputs <- c(metab_inputs*10, signaling_input)
 
 upstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(upstream_inputs, meta_network)
 downstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(downstream_inputs, meta_network)
@@ -598,7 +602,7 @@ save(rec_to_TF_cosmos_input, file = "data/cosmos/rec_to_TF_cosmos_input.Rdata")
 
 At this point, we can perform the COSMOS analysis. Firstly, the options for the CARNIVAL run such as the time limit and min gap tolerance are set and the user must provide a path to its CPLEX executable. You can check the CARNIVAL_options variable to see all possible options that can be adjusted.
 
-```{r Carnival options pre-run 1}
+```{r Carnival options pre-run 1, warning=F}
 ## Set CARNIVAL options to solve pre-optimization problem
 my_options <- default_CARNIVAL_options(solver = "cplex")
 my_options$solverPath <- "cplex_macos/cplex"
@@ -637,7 +641,8 @@ After pre-optimization, we can perform the actual COSMOS run using the pre-optim
 ```{r COSMOS run forward network 1, eval=FALSE}
 run_rec_to_TF <- run_COSMOS_signaling_to_metabolism(data = pre_run_rec_to_TF,
                                                     CARNIVAL_options = my_options)
-
+data("HMDB_mapper_vec")
+run_rec_to_TF <- cosmosR::format_COSMOS_res(run_rec_to_TF, metab_mapping = HMDB_mapper_vec)
 save(run_rec_to_TF, file = "results/cosmos/run_rec_to_TF.Rdata")
 ```
 
@@ -647,10 +652,10 @@ In order to analyze the gained sub-network, we first process the COSMOS result b
 ## COSMOS output evaluation
 load("results/cosmos/run_rec_to_TF.Rdata")
 
-SIF_rec_to_TF <- as.data.frame(run_rec_to_TF$weightedSIF)
+SIF_rec_to_TF <- as.data.frame(run_rec_to_TF[[1]])
 SIF_rec_to_TF <- SIF_rec_to_TF[which(SIF_rec_to_TF$Weight != 0),]
 
-ATT_rec_to_TF <- as.data.frame(run_rec_to_TF$nodesAttributes)
+ATT_rec_to_TF <- as.data.frame(run_rec_to_TF[[2]])
 colnames(ATT_rec_to_TF)[1] <- "Nodes"
 ATT_rec_to_TF$measured <- ifelse(ATT_rec_to_TF$NodeType %in% c("M","T","S","P"),1,0)
 ATT_rec_to_TF$Activity <- ATT_rec_to_TF$AvgAct
@@ -755,7 +760,7 @@ The next step connects both networks, resulting in a complete network of interac
 
 After merging both inferred networks ATT file, we can identify whether the activity of the node is positive or negative and save the result under the variable sign_activity. Here, to avoid multiple mentions of one specific node, we can combine multiple mentions by calculating the mean.
 
-```{r Combine ATTs}
+```{r Combine ATTs, warning=F}
 combined_ATT <- as.data.frame(rbind(ATT_rec_to_TF, ATT_TF_to_lig))
 combined_ATT$sign_activity <- sign(combined_ATT$AvgAct)
 
@@ -775,6 +780,41 @@ MOFA_weights <- MOFA_weights %>%
   filter(!duplicated(feature))
 MOFA_weights <- MOFA_weights[,c(1,3)]
 colnames(MOFA_weights) <- c("Nodes", "mofa_weights")
+
+#remove RNA and proteo tags and integrate values
+MOFA_weights$Nodes <- gsub("_RNA$","",MOFA_weights$Nodes)
+MOFA_weights$Nodes <- gsub("_proteo$","",MOFA_weights$Nodes)
+MOFA_weights$sign <- sign(MOFA_weights$mofa_weights)
+MOFA_weights$mofa_weights <- abs(MOFA_weights$mofa_weights)
+
+MOFA_weights <- MOFA_weights %>% group_by(Nodes) %>% summarise_each(funs(max(., na.rm = TRUE)))
+MOFA_weights <- as.data.frame(MOFA_weights)
+MOFA_weights$mofa_weights <- MOFA_weights$mofa_weights * MOFA_weights$sign
+MOFA_weights <- MOFA_weights[,-3]
+
+#make metabolite names coherent between mofa and cosmos
+#for now i just add the metab input that is already formatted
+#I will miss some weights that were not input but will fix that at later time
+MOFA_weights_metabaddon <- as.data.frame(metab_inputs)
+names(MOFA_weights_metabaddon) <- "mofa_weights"
+MOFA_weights_metabaddon$Nodes <- row.names(MOFA_weights_metabaddon)
+
+MOFA_weights_metabaddon[, 2] <- sapply(MOFA_weights_metabaddon[, 2], function(x, HMDB_mapper_vec) {
+        x <- gsub("Metab__", "", x)
+        suffixe <- stringr::str_extract(x, "_[a-z]$")
+        x <- gsub("_[a-z]$", "", x)
+        if (x %in% names(HMDB_mapper_vec)) {
+            x <- HMDB_mapper_vec[x]
+            x <- paste("Metab__", x, sep = "")
+        }
+        if (!is.na(suffixe)) {
+            x <- paste(x, suffixe, sep = "")
+        }
+        return(x)
+    }, HMDB_mapper_vec = HMDB_mapper_vec)
+
+MOFA_weights <- as.data.frame(rbind(MOFA_weights, MOFA_weights_metabaddon))
+
 
 ## Ligands
 lig_weights <- ligrec_TF_moon_inputs$ligrec
