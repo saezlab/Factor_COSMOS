@@ -950,8 +950,10 @@ Further, we can analyze the biological network by visualization through CytoScap
 
 Here, a potential output of this analysis highlighting a sub pathway is shown.
 
+![alt text](results/cytoscape/sub_pathway_figure.pdf "Title")
+
 ```{r Full COSMOS network image, echo = FALSE, message=FALSE, fig.align='center', fig.cap='COSMOS sub signaling pathway', out.height = "460px", out.width='800px'}
-knitr::include_graphics("results/cytoscape/sub_pathway_figure.pdf")
+# knitr::include_graphics("results/cytoscape/sub_pathway_figure.pdf")
 ```
 
 ### Further analyses

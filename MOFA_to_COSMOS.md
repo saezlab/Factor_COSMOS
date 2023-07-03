@@ -1187,14 +1187,7 @@ CytoScape. A tutorial for that is given under ./RCytoScape_tutorial.Rmd.
 Here, a potential output of this analysis highlighting a sub pathway is
 shown.
 
-<div class="figure" style="text-align: center">
-
-<embed src="results/cytoscape/sub_pathway_figure.pdf" title="COSMOS sub signaling pathway" width="800px" height="460px" type="application/pdf" />
-<p class="caption">
-COSMOS sub signaling pathway
-</p>
-
-</div>
+![alt text](results/cytoscape/sub_pathway_figure.pdf "Title")
 
 ### Further analyses
 
