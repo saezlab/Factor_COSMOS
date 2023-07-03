@@ -1,19 +1,7 @@
----
-title: "Further MOFA-COSMOS downstream analyses"
-author: "Pascal Lafrenz and Aurelien Dugourd"
-date: "`r Sys.Date()`"
-output:
-  md_document:
-    variant: gfm
----
+In order to evaluate the data obtained from the MOFA-COSMOS pipeline
+downstream, further analyses can be performed.
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
-
-In order to evaluate the data obtained from the MOFA-COSMOS pipeline downstream, further analyses can be performed.
-
-```{r Loading packages, message=FALSE}
+``` r
 library(decoupleR)
 library(liana)
 library(moon)
@@ -30,27 +18,64 @@ library(cosmosR)
 
 ## Calculate cell-line specific transcriptomics
 
-Firstly, we can calculate cell-line specific transcriptomic values by 
-multiplying the MOFA feature weights with the MOFA 
-factor weights (here: Factor 4). While this can seemlessly be extended to 
-metabolomic data (or any other omics for which we have MOFA weights), we will
-focus on the RNA layer for the sake of simplicity.
+Firstly, we can calculate cell-line specific transcriptomic values by
+multiplying the MOFA feature weights with the MOFA factor weights (here:
+Factor 4). While this can seemlessly be extended to metabolomic data (or
+any other omics for which we have MOFA weights), we will focus on the
+RNA layer for the sake of simplicity.
 
-```{r Calculate cell-line specific transcriptomics}
+``` r
 # RNA cell-line-specific values (RNA_specific = MOFA_feature_weight * MOFA_factor_weight)
 
 ## Get RNA raw values
 RNA_raw <- as.data.frame(read_csv("data/RNA/RNA_log2_FPKM_clean.csv"))
+```
+
+    ## Rows: 11265 Columns: 61
+    ## ── Column specification ────────────────────────────────────────────────────────
+    ## Delimiter: ","
+    ## chr  (1): Genes
+    ## dbl (60): 786-0, A498, A549/ATCC, ACHN, BT-549, CAKI-1, CCRF-CEM, COLO 205, ...
+    ## 
+    ## ℹ Use `spec()` to retrieve the full column specification for this data.
+    ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+
+``` r
 rownames(RNA_raw) <- RNA_raw[,1]
 RNA_raw <- RNA_raw[,-1]
 RNA_raw <- melt(as.data.frame(cbind(RNA_raw,row.names(RNA_raw))))
+```
+
+    ## Using row.names(RNA_raw) as id variables
+
+``` r
 RNA_raw$view <- "RNA"
 RNA_raw <- RNA_raw[,c(2,1,4,3)]                 
 names(RNA_raw) <- c("sample","feature","view","value")
 
 ## Get MOFA feature and factor weights from Factor 4  
 model <- load_model('results/mofa/mofa_res_10factor.hdf5')
+```
+
+    ## Warning in load_model("results/mofa/mofa_res_10factor.hdf5"): There are duplicated features names across different views. We will add the suffix *_view* only for those features 
+    ##             Example: if you have both TP53 in mRNA and mutation data it will be renamed to TP53_mRNA, TP53_mutation
+
+    ## Warning in .quality_control(object, verbose = verbose): Factor(s) 1 are strongly correlated with the total number of expressed features for at least one of your omics. Such factors appear when there are differences in the total 'levels' between your samples, *sometimes* because of poor normalisation in the preprocessing steps.
+
+``` r
 meta_data <- read_csv("data/metadata/RNA_metadata_cluster.csv")[,c(1,2)]
+```
+
+    ## Rows: 60 Columns: 16
+    ## ── Column specification ────────────────────────────────────────────────────────
+    ## Delimiter: ","
+    ## chr (12): cell_line, tissue of origin a, sex a, prior treatment a,b, Epithel...
+    ## dbl  (4): cluster, age a, mdr f, doubling time g
+    ## 
+    ## ℹ Use `spec()` to retrieve the full column specification for this data.
+    ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+
+``` r
 colnames(meta_data) <- c("sample","cluster")
 samples_metadata(model) <- meta_data[meta_data$sample %in% samples_metadata(model)$sample,]
 
@@ -76,12 +101,13 @@ rownames(nodes_cellline_weight) <- nodes_cellline_weight$feature
 nodes_cellline_weight <- nodes_cellline_weight[,-1]
 ```
 
-Then we can further select a subset of nodes to focus on, here we select 
-interesting nodes that are well representing transcriptional regulations (e.g. 
-HIF1A, MYC, STAT1), PTM regulations (e.g. JAK1, ABL1), ligand-receptor
-interactions (e.g. VEGFA-ITGB1) and metabolic regulations (e.g. ACO1 and citrate).
+Then we can further select a subset of nodes to focus on, here we select
+interesting nodes that are well representing transcriptional regulations
+(e.g.  HIF1A, MYC, STAT1), PTM regulations (e.g. JAK1, ABL1),
+ligand-receptor interactions (e.g. VEGFA-ITGB1) and metabolic
+regulations (e.g. ACO1 and citrate).
 
-```{r Select MAPK pathway nodes}
+``` r
 ## Select nodes 
 interesting_nodes <- data.frame("name" = c("VEGFA","HIF1A","PRKCA","FYN","ILK","ACO1","JAK1","ABL1","ITGB1","STAT1","AKT1","MYC","TKT"))
 nodes_cellline_weight_filtered <- nodes_cellline_weight[rownames(nodes_cellline_weight) %in% interesting_nodes$name,]
@@ -89,8 +115,20 @@ nodes_cellline_weight_filtered <- nodes_cellline_weight[rownames(nodes_cellline_
 
 And add the meta data information.
 
-```{r Add cell line meta data}
+``` r
 RNA_metadata_cluster <- as.data.frame(read_csv(file = "data/metadata/RNA_metadata_cluster.csv"))
+```
+
+    ## Rows: 60 Columns: 16
+    ## ── Column specification ────────────────────────────────────────────────────────
+    ## Delimiter: ","
+    ## chr (12): cell_line, tissue of origin a, sex a, prior treatment a,b, Epithel...
+    ## dbl  (4): cluster, age a, mdr f, doubling time g
+    ## 
+    ## ℹ Use `spec()` to retrieve the full column specification for this data.
+    ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+
+``` r
 tissue_origin_cluster <- as.data.frame(RNA_metadata_cluster[,c(2,3)]) #:2,8
 colnames(tissue_origin_cluster) <- c("cluster","Tissue") #", , "histology")
 rownames(tissue_origin_cluster) <- RNA_metadata_cluster[,1]
@@ -102,7 +140,7 @@ tissue_origin_cluster <- tissue_origin_cluster[,-1,drop = F]
 
 To visualize the results, heatmaps are shown.
 
-```{r Visualization transcriptomics, fig.width = 12, fig.height = 4}
+``` r
 var1 <- rev(brewer.pal(9, "Set1"))
 names(var1) <- unique(tissue_origin_cluster$Tissue)
 # var2 <- c("red","cyan","orange")
@@ -118,19 +156,23 @@ pheatmap(nodes_cellline_weight,
          show_rownames =  F, 
          annotation_col = tissue_origin_cluster, 
          annotation_colors =  anno_colors)
+```
 
+![](Further_MOFA_COSMOS_analyses_files/figure-gfm/Visualization%20transcriptomics-1.png)<!-- -->
+
+``` r
 pheatmap(nodes_cellline_weight_filtered, 
          display_numbers = F,
          annotation_col = tissue_origin_cluster, 
          annotation_colors =  anno_colors)
-
-
 ```
-Since, we are also interested in comparing the two cell lines with the most differing features, we use the MOFA factor values to determine these by calculating the highest difference.
 
+![](Further_MOFA_COSMOS_analyses_files/figure-gfm/Visualization%20transcriptomics-2.png)<!-- -->
+Since, we are also interested in comparing the two cell lines with the
+most differing features, we use the MOFA factor values to determine
+these by calculating the highest difference.
 
-
-```{r Identify distance between cell lines}
+``` r
 # Calculate activity scores of most different cell lines
 
 ## Get cell line factor weights
@@ -149,6 +191,11 @@ rownames(diff_matrix) <- factor_weights$sample
 colnames(diff_matrix) <- factor_weights$sample
 
 max(diff_matrix) #sample 28 and 44 = MOLT-4 & SF-539
+```
+
+    ## [1] 3.564818
+
+``` r
 max_cell_lines <- rownames(diff_matrix)[which(diff_matrix == max(diff_matrix), arr.ind = T)][c(1,2)]
 
 plot_factor(model, 
@@ -169,9 +216,21 @@ plot_factor(model,
   theme(strip.text = element_text(family = "Times New Roman"), axis.text.x = element_blank(),axis.ticks.x = element_blank(),axis.title.y.right =element_text(colour = "red"),
         axis.title.x = element_text(family = "Times New Roman"), axis.title.y = element_text(family = "Times New Roman"), axis.text = element_text(family = "Times New Roman"), legend.text = element_text(family = "Times New Roman"), legend.title = element_text(family = "Times New Roman"))
 ```
-Let's focus on the interesting node values for these cell lines.
 
-```{r Visualization transcriptomics most distant cell line, fig.width = 5, fig.height = 3.5}
+    ## Warning: `fct_explicit_na()` was deprecated in forcats 1.0.0.
+    ## ℹ Please use `fct_na_value_to_level()` instead.
+    ## ℹ The deprecated feature was likely used in the MOFA2 package.
+    ##   Please report the issue at <https://github.com/bioFAM/MOFA2>.
+    ## This warning is displayed once every 8 hours.
+    ## Call `lifecycle::last_lifecycle_warnings()` to see where this warning was
+    ## generated.
+
+    ## Warning: Removed 56 rows containing missing values (`geom_label()`).
+
+![](Further_MOFA_COSMOS_analyses_files/figure-gfm/Identify%20distance%20between%20cell%20lines-1.png)<!-- -->
+Let’s focus on the interesting node values for these cell lines.
+
+``` r
 pheatmap(nodes_cellline_weight_filtered[,max_cell_lines], 
          display_numbers = T,
          annotation_col = tissue_origin_cluster, 
@@ -179,18 +238,22 @@ pheatmap(nodes_cellline_weight_filtered[,max_cell_lines],
          cluster_cols = F)
 ```
 
-Interestingly, we can see the clear pattern differences for most genes here
-at the RNA level, except for FYN, AKT1 and TKT. However, these are still 
-interesting candidate from a topological perspective, as they can explain 
-connections between ITGB1, PRKCA and ABL1. Thus it's possible that those 
-mechanisms are primarilly driven at the PTM level, instead of the transcriptional
-regulation level.
+![](Further_MOFA_COSMOS_analyses_files/figure-gfm/Visualization%20transcriptomics%20most%20distant%20cell%20line-1.png)<!-- -->
+
+Interestingly, we can see the clear pattern differences for most genes
+here at the RNA level, except for FYN, AKT1 and TKT. However, these are
+still interesting candidate from a topological perspective, as they can
+explain connections between ITGB1, PRKCA and ABL1. Thus it’s possible
+that those mechanisms are primarilly driven at the PTM level, instead of
+the transcriptional regulation level.
 
 ## Use cell-line specific transcriptomics to infer biological activities
 
-Further, we can use the cell-line specific transcriptomic values to calculate cell-line specific activity scores with decoupleR and prior knowledge.
+Further, we can use the cell-line specific transcriptomic values to
+calculate cell-line specific activity scores with decoupleR and prior
+knowledge.
 
-```{r Calculate cell-line specific activity scores, eval=FALSE}
+``` r
 ## Calculate cell-line specific activity scores
 ### LIANA, mOOn, Dorothea
 
@@ -262,10 +325,10 @@ for(i in unique(RNA_weight_cell_line$sample)) {
 }
 ```
 
-After that, we create a dataframe that includes the activity values for our nodes inside the sub signaling pathway.
+After that, we create a dataframe that includes the activity values for
+our nodes inside the sub signaling pathway.
 
-```{r Activity scores of MAPK pathway, eval=FALSE}
-
+``` r
 ## Filter interesting nodes 
 lig_rec_scores_df <- data.frame(t(data.table::rbindlist(
   lapply(lig_rec_scores, function(x) data.table::data.table(t(x))),
@@ -293,13 +356,37 @@ write_csv(all_activity_scores, file = "data/mofa/all_activity_scores.csv")
 
 We can visualize the different activity scores with heatmaps.
 
-```{r Visualize activity scores, fig.width= 11, fig.height=4}
+``` r
 ## Visualize results
 activity_scores <- as.data.frame(read_csv(file = "data/mofa/activity_scores.csv"))
+```
+
+    ## Rows: 5 Columns: 59
+    ## ── Column specification ────────────────────────────────────────────────────────
+    ## Delimiter: ","
+    ## chr  (1): rownames(activity_scores)
+    ## dbl (58): 786-0, A498, A549/ATCC, ACHN, BT-549, CAKI-1, CCRF-CEM, COLO 205, ...
+    ## 
+    ## ℹ Use `spec()` to retrieve the full column specification for this data.
+    ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+
+``` r
 rownames(activity_scores) <- activity_scores[,1]
 activity_scores <- activity_scores[,-1]
 
 all_activity_scores <- as.data.frame(read_csv(file = "data/mofa/all_activity_scores.csv"))
+```
+
+    ## Rows: 452 Columns: 59
+    ## ── Column specification ────────────────────────────────────────────────────────
+    ## Delimiter: ","
+    ## chr  (1): rownames(all_activity_scores)
+    ## dbl (58): 786-0, A498, A549/ATCC, ACHN, BT-549, CAKI-1, CCRF-CEM, COLO 205, ...
+    ## 
+    ## ℹ Use `spec()` to retrieve the full column specification for this data.
+    ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+
+``` r
 rownames(all_activity_scores) <- all_activity_scores[,1]
 all_activity_scores <- all_activity_scores[,-1]
 
@@ -311,18 +398,23 @@ pheatmap(activity_scores,
          annotation_colors =  anno_colors)
 ```
 
-```{r Visualize activity scores for specific cell lines, fig.width = 5, fig.height = 2.5}
+![](Further_MOFA_COSMOS_analyses_files/figure-gfm/Visualize%20activity%20scores-1.png)<!-- -->
+
+``` r
 pheatmap(activity_scores[,colnames(activity_scores) %in% max_cell_lines], 
          display_numbers = T, 
          cluster_rows = T, cluster_cols = F,
          annotation_col = tissue_origin_cluster, 
          annotation_colors =  anno_colors)
-
 ```
 
-Since we would like to see relative differences between our cell lines, we calculate the relative activity values here through scaling ($\frac{feature_{single} - mean(feature)}{sd(feature)}$).
+![](Further_MOFA_COSMOS_analyses_files/figure-gfm/Visualize%20activity%20scores%20for%20specific%20cell%20lines-1.png)<!-- -->
 
-```{r Relative cell-line specific activities}
+Since we would like to see relative differences between our cell lines,
+we calculate the relative activity values here through scaling
+($\frac{feature_{single} - mean(feature)}{sd(feature)}$).
+
+``` r
 ## Transform activity values to relative ones
 SDs <- apply(activity_scores,1,function(x){sd(x,na.rm = T)})
 means <- rowMeans(activity_scores, na.rm = T)
@@ -333,9 +425,9 @@ means <- rowMeans(all_activity_scores, na.rm = T)
 all_activity_scores_scaled <- (all_activity_scores - means) / SDs
 ```
 
-Let's visualize the scaled activity scores.
+Let’s visualize the scaled activity scores.
 
-```{r Visualization of relative activities}
+``` r
 ## Visualize results
 pheatmap(activity_scores_scaled, 
          display_numbers = F, 
@@ -343,25 +435,29 @@ pheatmap(activity_scores_scaled,
          cluster_cols = T,
          annotation_col = tissue_origin_cluster, 
          annotation_colors =  anno_colors)
+```
 
+![](Further_MOFA_COSMOS_analyses_files/figure-gfm/Visualization%20of%20relative%20activities-1.png)<!-- -->
+
+``` r
 pheatmap(activity_scores_scaled[,colnames(activity_scores_scaled) %in% max_cell_lines], 
          display_numbers = T, 
          cluster_rows = T, 
          cluster_cols = F,
          annotation_col = tissue_origin_cluster, 
          annotation_colors =  anno_colors)
-
 ```
 
+![](Further_MOFA_COSMOS_analyses_files/figure-gfm/Visualization%20of%20relative%20activities-2.png)<!-- -->
 
 ## Visualize results of cell-line specific values with CytoScape
 
-Finally, we can add the activity scores to our network in CytoScape 
-allowing us to visualize all results nicely. For more flexibility, you can 
-directly import the SIF and ATT files in cytoscpae and use the graphical user
-interface to make your own style.
+Finally, we can add the activity scores to our network in CytoScape
+allowing us to visualize all results nicely. For more flexibility, you
+can directly import the SIF and ATT files in cytoscpae and use the
+graphical user interface to make your own style.
 
-```{r CytoScape, eval=FALSE}
+``` r
 ## Add weighted, transformed activity scores to network
 combined_SIF_reduced <- read_csv(file = "results/cosmos/SIF_mofamoon_combined.csv")
 combined_ATT_reduced <- read_csv(file = "results/cosmos/ATT_mofamoon_combined.csv")
@@ -447,17 +543,111 @@ node.colors <- c(rev(brewer.pal(length(cosmos_data.values), "RdBu")))
 setNodeColorMapping('Activity',cosmos_data.values, node.colors, style.name = style.name, network = paste0(i, "_EGF_EGFR_RAS_ERK_pathway_start_end"))
 ```
 
-```{r, eval=FALSE}
+``` r
 for (cell_line in max_cell_lines) {
   exportImage(filename = paste0("results/cytoscape/subnetwork_",cell_line,"_analysis.pdf"), type = "PDF", resolution = 900, network = paste0(cell_line, "_EGF_EGFR_RAS_ERK_pathway_start_end"))
 }
 
 saveSession(filename = "results/cytoscape/cell_line_specific_cosmos_network_analysis.cys")
-
 ```
 
 ## Session info
 
-```{r Session info}
+``` r
 sessionInfo()
 ```
+
+    ## R version 4.2.0 (2022-04-22)
+    ## Platform: aarch64-apple-darwin20 (64-bit)
+    ## Running under: macOS Monterey 12.6
+    ## 
+    ## Matrix products: default
+    ## BLAS:   /Library/Frameworks/R.framework/Versions/4.2-arm64/Resources/lib/libRblas.0.dylib
+    ## LAPACK: /Library/Frameworks/R.framework/Versions/4.2-arm64/Resources/lib/libRlapack.dylib
+    ## 
+    ## locale:
+    ## [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
+    ## 
+    ## attached base packages:
+    ## [1] stats     graphics  grDevices utils     datasets  methods   base     
+    ## 
+    ## other attached packages:
+    ##  [1] cosmosR_1.5.2      RColorBrewer_1.1-3 RCy3_2.16.0        ggplot2_3.4.0     
+    ##  [5] MOFA2_1.6.0        reshape2_1.4.4     dplyr_1.1.1        pheatmap_1.0.12   
+    ##  [9] readr_2.1.4        moon_0.1.0         liana_0.1.5        decoupleR_2.5.2   
+    ## 
+    ## loaded via a namespace (and not attached):
+    ##   [1] uuid_1.1-0                  readxl_1.4.2               
+    ##   [3] backports_1.4.1             circlize_0.4.15            
+    ##   [5] corrplot_0.92               plyr_1.8.8                 
+    ##   [7] igraph_1.4.2                repr_1.1.6                 
+    ##   [9] sp_1.6-0                    BiocParallel_1.30.4        
+    ##  [11] listenv_0.9.0               GenomeInfoDb_1.32.4        
+    ##  [13] digest_0.6.31               foreach_1.5.2              
+    ##  [15] htmltools_0.5.5             OmnipathR_3.9.6            
+    ##  [17] fansi_1.0.4                 magrittr_2.0.3             
+    ##  [19] checkmate_2.1.0             base64url_1.4              
+    ##  [21] ScaledMatrix_1.4.1          cluster_2.1.4              
+    ##  [23] doParallel_1.0.17           tzdb_0.3.0                 
+    ##  [25] limma_3.52.4                ComplexHeatmap_2.12.1      
+    ##  [27] globals_0.16.2              matrixStats_0.63.0         
+    ##  [29] vroom_1.6.1                 prettyunits_1.1.1          
+    ##  [31] colorspace_2.1-0            ggrepel_0.9.2              
+    ##  [33] rvest_1.0.3                 rappdirs_0.3.3             
+    ##  [35] xfun_0.38                   crayon_1.5.2               
+    ##  [37] RCurl_1.98-1.10             jsonlite_1.8.4             
+    ##  [39] graph_1.74.0                progressr_0.13.0           
+    ##  [41] iterators_1.0.14            glue_1.6.2                 
+    ##  [43] gtable_0.3.1                zlibbioc_1.42.0            
+    ##  [45] XVector_0.36.0              GetoptLong_1.0.5           
+    ##  [47] DelayedArray_0.22.0         BiocSingular_1.12.0        
+    ##  [49] Rhdf5lib_1.18.2             future.apply_1.10.0        
+    ##  [51] shape_1.4.6                 SingleCellExperiment_1.18.1
+    ##  [53] BiocGenerics_0.42.0         HDF5Array_1.24.2           
+    ##  [55] scales_1.2.1                edgeR_3.38.4               
+    ##  [57] Rcpp_1.0.10                 progress_1.2.2             
+    ##  [59] clue_0.3-63                 reticulate_1.28            
+    ##  [61] dqrng_0.3.0                 bit_4.0.5                  
+    ##  [63] rsvd_1.0.5                  stats4_4.2.0               
+    ##  [65] metapod_1.4.0               httr_1.4.5                 
+    ##  [67] dir.expiry_1.4.0            farver_2.1.1               
+    ##  [69] XML_3.99-0.13               pkgconfig_2.0.3            
+    ##  [71] scuttle_1.6.3               uwot_0.1.14                
+    ##  [73] RJSONIO_1.3-1.8             locfit_1.5-9.7             
+    ##  [75] utf8_1.2.3                  labeling_0.4.2             
+    ##  [77] tidyselect_1.2.0            rlang_1.1.0                
+    ##  [79] later_1.3.0                 munsell_0.5.0              
+    ##  [81] cellranger_1.1.0            tools_4.2.0                
+    ##  [83] cli_3.6.1                   generics_0.1.3             
+    ##  [85] evaluate_0.20               stringr_1.5.0              
+    ##  [87] fastmap_1.1.1               yaml_2.3.7                 
+    ##  [89] bit64_4.0.5                 fs_1.6.1                   
+    ##  [91] knitr_1.42                  purrr_1.0.1                
+    ##  [93] future_1.30.0               sparseMatrixStats_1.8.0    
+    ##  [95] scran_1.24.1                xml2_1.3.3                 
+    ##  [97] compiler_4.2.0              rstudioapi_0.14            
+    ##  [99] filelock_1.0.2              curl_5.0.0                 
+    ## [101] png_0.1-8                   tibble_3.2.1               
+    ## [103] statmod_1.5.0               stringi_1.7.12             
+    ## [105] highr_0.10                  basilisk.utils_1.8.0       
+    ## [107] forcats_1.0.0               logger_0.2.2               
+    ## [109] IRdisplay_1.1               lattice_0.20-45            
+    ## [111] bluster_1.6.0               Matrix_1.5-3               
+    ## [113] vctrs_0.6.1                 pillar_1.9.0               
+    ## [115] lifecycle_1.0.3             rhdf5filters_1.8.0         
+    ## [117] GlobalOptions_0.1.2         BiocNeighbors_1.14.0       
+    ## [119] cowplot_1.1.1               bitops_1.0-7               
+    ## [121] irlba_2.3.5.1               GenomicRanges_1.48.0       
+    ## [123] R6_2.5.1                    IRanges_2.30.1             
+    ## [125] parallelly_1.34.0           codetools_0.2-18           
+    ## [127] rhdf5_2.40.0                SummarizedExperiment_1.26.1
+    ## [129] rjson_0.2.21                withr_2.5.0                
+    ## [131] SeuratObject_4.1.3          uchardet_1.1.1             
+    ## [133] S4Vectors_0.34.0            GenomeInfoDbData_1.2.8     
+    ## [135] parallel_4.2.0              hms_1.1.3                  
+    ## [137] IRkernel_1.3.2              grid_4.2.0                 
+    ## [139] beachmat_2.12.0             tidyr_1.3.0                
+    ## [141] basilisk_1.8.1              rmarkdown_2.21             
+    ## [143] DelayedMatrixStats_1.18.2   MatrixGenerics_1.8.1       
+    ## [145] Rtsne_0.16                  pbdZMQ_0.3-9               
+    ## [147] base64enc_0.1-3             Biobase_2.56.0

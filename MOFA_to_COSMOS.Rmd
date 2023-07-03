@@ -960,6 +960,13 @@ Here, a potential output of this analysis highlighting a sub pathway is shown.
 
 Further MOFA-COSMOS downstream analyses focusing on analyzing cell line specific MOFA transcriptomics are given in ./Further_MOFA_COSMOS_analyses.Rmd.
 
+```{r Select MAPK pathway nodes}
+## Select nodes 
+interesting_nodes <- data.frame("name" = c("VEGFA","HIF1A","PRKCA","BNIP3","DAG1","ACO1","JAK1","ABL1","ITGB1","STAT1","PRKACA","MYC"))
+nodes_cellline_weight_filtered <- nodes_cellline_weight[rownames(nodes_cellline_weight) %in% interesting_nodes$name,]
+```
+
+
 ### Session info
 
 ```{r Session info}
