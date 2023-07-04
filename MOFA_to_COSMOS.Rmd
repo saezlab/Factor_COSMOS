@@ -1248,6 +1248,17 @@ combined_ATT_moon <- as.data.frame(rbind(ATT_rec_to_TFmetab, ATT_TF_lig))
 combined_ATT_moon <- combined_ATT_moon %>% group_by(Nodes) %>% summarise_each(funs(mean(., na.rm = TRUE)))
 combined_ATT_moon <- as.data.frame(combined_ATT_moon)
 
+ligrec_ressource_addon <- ligrec_ressource[
+  ligrec_ressource$source_genesymbol %in% combined_SIF_moon$source &
+    ligrec_ressource$target_genesymbol %in% combined_SIF_moon$target
+, c(10,12)]
+ligrec_ressource_addon$sign <- 1
+ligrec_ressource_addon$Weight <- 1
+names(ligrec_ressource_addon)[c(1,2)] <- c("source","target")
+ligrec_ressource_addon <- unique(ligrec_ressource_addon)
+
+combined_SIF_moon <- as.data.frame(rbind(combined_SIF_moon, ligrec_ressource_addon))
+
 write_csv(combined_SIF_moon,file = "results/cosmos/moon/combined_SIF_moon.csv")
 write_csv(combined_ATT_moon,file = "results/cosmos/moon/combined_ATT_moon.csv")
 ```
