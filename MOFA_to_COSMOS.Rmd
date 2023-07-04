@@ -1259,6 +1259,8 @@ ligrec_ressource_addon <- unique(ligrec_ressource_addon)
 
 combined_SIF_moon <- as.data.frame(rbind(combined_SIF_moon, ligrec_ressource_addon))
 
+#It appears I may need to only consider direct TF regulations for TF to lig
+
 write_csv(combined_SIF_moon,file = "results/cosmos/moon/combined_SIF_moon.csv")
 write_csv(combined_ATT_moon,file = "results/cosmos/moon/combined_ATT_moon.csv")
 ```
