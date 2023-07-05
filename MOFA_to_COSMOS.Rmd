@@ -610,8 +610,8 @@ my_options <- default_CARNIVAL_options(solver = "cplex")
 my_options$solverPath <- "cplex_macos/cplex"
 my_options$solver <- "cplex"
 my_options$mipGAP <- 0.05
-my_options$threads <- 2
-my_options$timelimit <- 360
+my_options$threads <- 6
+my_options$timelimit <- 3200/6
 my_options$limitPop <- 100
 
 data("HMDB_mapper_vec")
@@ -624,7 +624,7 @@ pre_run_rec_to_TF <- preprocess_COSMOS_signaling_to_metabolism(meta_network = me
                                                                signaling_data = upstream_inputs_filtered,
                                                                metabolic_data = downstream_inputs_filtered,
                                                                diff_expression_data = RNA_input,
-                                                               maximum_network_depth = 4,
+                                                               maximum_network_depth = 5,
                                                                remove_unexpressed_nodes = T,
                                                                filter_tf_gene_interaction_by_optimization = F,
                                                                CARNIVAL_options = my_options)
@@ -636,8 +636,8 @@ In this part, we can set up the options for the optimization run. The running ti
 ## Set CARNIVAL options to solve optimization problem
 my_options$mipGAP <- 0.05
 my_options$threads <- 6
-my_options$timelimit <- 720
-my_options$limitPop <- 100
+# my_options$timelimit <- 720
+# my_options$limitPop <- 100
 ```
 
 After pre-optimization, we can perform the actual COSMOS run using the pre-optimized solution.
@@ -687,10 +687,13 @@ Then the datasets are merged appropriately, entries that are not included in the
 
 ```{r Combine inputs}
 upstream_inputs <- c(signaling_input)
-downstream_inputs <- c(lig_inputs, metab_inputs*10) #factor 10 to scale up the metabs to the ulm scores
+downstream_inputs <- c(lig_inputs) 
 
-upstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(upstream_inputs, meta_network)
-downstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(downstream_inputs, meta_network)
+dorothea_PKN <- dorothea_df[,c(1,3,2)]
+names(dorothea_PKN)[2] <- "interaction"
+
+upstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(upstream_inputs, dorothea_PKN)
+downstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(downstream_inputs, dorothea_PKN)
 
 TF_to_lig_cosmos_input <- list(upstream_inputs_filtered, downstream_inputs_filtered)
 save(TF_to_lig_cosmos_input, file = "data/cosmos/TF_to_lig_cosmos_input.Rdata")
@@ -707,13 +710,13 @@ my_options$limitPop <- 100
 After setting the variables for the CPLEX solver, we can perform the pre-optimization run ...
 
 ```{r COSMOS pre-run forward network 2, eval=FALSE}
-pre_run_TF_to_lig <- preprocess_COSMOS_signaling_to_metabolism(meta_network = meta_network, 
+pre_run_TF_to_lig <- preprocess_COSMOS_signaling_to_metabolism(meta_network = dorothea_PKN, 
                                                                signaling_data = upstream_inputs_filtered,
                                                                metabolic_data = downstream_inputs_filtered,
                                                                diff_expression_data = RNA_input,
-                                                               maximum_network_depth = 5,
+                                                               maximum_network_depth = 1,
                                                                remove_unexpressed_nodes = T,
-                                                               filter_tf_gene_interaction_by_optimization = F,
+                                                               filter_tf_gene_interaction_by_optimization = T,
                                                                CARNIVAL_options = my_options)
 ```
 
@@ -1068,7 +1071,7 @@ abline(v = -1)
 
 solution_network <- reduce_solution_network(decoupleRnival_res = recursive_decoupleRnival_res, 
                                             meta_network = meta_network_filtered,
-                                            cutoff = 1, 
+                                            cutoff = 1.5, 
                                             upstream_input = upstream_inputs_filtered, 
                                             RNA_input = RNA_input, 
                                             n_steps = n_steps)
@@ -1102,13 +1105,10 @@ write_csv(ATT_rec_to_TFmetab,file = "results/cosmos/moon/ATT_rec_TFmetab.csv")
 ```
 ```{r Prepare moon input for receptor to TFs and metabs}
 ##filter expressed genes from PKN
-data("meta_network")
-
-meta_network <- meta_network_cleanup(meta_network)
 
 expressed_genes <- as.data.frame(read_csv("data/RNA/RNA_log2_FPKM_clean.csv"))
 expressed_genes <- setNames(rep(1,length(expressed_genes[,1])), expressed_genes$Genes)
-meta_network_filtered <- cosmosR:::filter_pkn_expressed_genes(names(expressed_genes), meta_pkn = meta_network)
+dorothea_PKN_filtered <- cosmosR:::filter_pkn_expressed_genes(names(expressed_genes), meta_pkn = dorothea_PKN)
 
 
 #prepare upstream inputs
@@ -1125,33 +1125,23 @@ lig_inputs <- as.numeric(lig_inputs)
 names(lig_inputs) <- ligands
 downstream_inputs <- lig_inputs #the downstream input should be complete
 
-upstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(upstream_inputs, meta_network_filtered)
-downstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(downstream_inputs, meta_network_filtered)
+upstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(upstream_inputs, dorothea_PKN_filtered)
+downstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(downstream_inputs, dorothea_PKN_filtered)
 
 #Filter inputs and prune the meta_network to only keep nodes that can be found downstream of the inputs
 #The number of step is quite flexible, 7 steps already covers most of the network
 
-n_steps <- 6
+n_steps <- 1
 
 # in this step we prune the network to keep only the relevant part between upstream and downstream nodes
-meta_network_filtered <- cosmosR:::keep_controllable_neighbours(meta_network_filtered
+dorothea_PKN_filtered <- cosmosR:::keep_controllable_neighbours(dorothea_PKN_filtered
                                                        , n_steps, 
                                                        names(upstream_inputs_filtered))
-downstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(downstream_inputs_filtered, meta_network_filtered)
-meta_network_filtered <- cosmosR:::keep_observable_neighbours(meta_network_filtered, n_steps, names(downstream_inputs_filtered))
-upstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(upstream_inputs_filtered, meta_network_filtered)
+downstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(downstream_inputs_filtered, dorothea_PKN_filtered)
+dorothea_PKN_filtered <- cosmosR:::keep_observable_neighbours(dorothea_PKN_filtered, n_steps, names(downstream_inputs_filtered))
+upstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(upstream_inputs_filtered, dorothea_PKN_filtered)
 
 #compress the network to avoid redundant master controllers
-meta_network_compressed_list <- compress_same_children(meta_network_filtered, sig_input = upstream_inputs_filtered, metab_input = downstream_inputs_filtered)
-
-meta_network_compressed <- meta_network_compressed_list$compressed_network
-
-node_signatures <- meta_network_compressed_list$node_signatures
-
-duplicated_parents <- meta_network_compressed_list$duplicated_signatures
-
-meta_network_compressed <- meta_network_cleanup(meta_network_compressed)
-
 load(file = "support/dorothea_df.RData")
 
 RNA_input <- as.numeric(weights$RNA[,4])
@@ -1159,7 +1149,7 @@ names(RNA_input) <- gsub("_RNA$","",row.names(weights$RNA))
 ```
 
 ```{r run moon TF to lig}
-meta_network_TF_lig <- meta_network_compressed
+meta_network_TF_lig <- dorothea_PKN_filtered
 
 before <- 1
 after <- 0
@@ -1185,21 +1175,9 @@ if(i < 10)
   print(paste("Interupted after ",paste(i," iterations. Convergence uncertain.", sep = ""),sep = ""))
 }
 
-duplicated_parents_df <- data.frame(duplicated_parents)
-duplicated_parents_df$source_original <- row.names(duplicated_parents_df)
-names(duplicated_parents_df)[1] <- "source"
+levels <- recursive_decoupleRnival_res[,c(1,3)]
 
-addons <- data.frame(names(node_signatures)[-which(names(node_signatures) %in% duplicated_parents_df$source_original)]) 
-names(addons)[1] <- "source"
-addons$source_original <- addons$source
-
-mapping_table <- as.data.frame(rbind(duplicated_parents_df,addons))
-
-recursive_decoupleRnival_res <- merge(recursive_decoupleRnival_res, mapping_table, by = "source")
-
-levels <- recursive_decoupleRnival_res[,c(4,3)]
-
-recursive_decoupleRnival_res <- recursive_decoupleRnival_res[,c(4,2)]
+recursive_decoupleRnival_res <- recursive_decoupleRnival_res[,c(1,2)]
 names(recursive_decoupleRnival_res)[1] <- "source"
 
 plot(density(recursive_decoupleRnival_res$score))
@@ -1207,8 +1185,8 @@ abline(v = 1)
 abline(v = -1)
 
 solution_network <- reduce_solution_network(decoupleRnival_res = recursive_decoupleRnival_res, 
-                                            meta_network = meta_network_filtered,
-                                            cutoff = 1, 
+                                            meta_network = as.data.frame(dorothea_PKN_filtered[,c(1,3,2)]),
+                                            cutoff = 1.5, 
                                             upstream_input = upstream_inputs_filtered, 
                                             RNA_input = RNA_input, 
                                             n_steps = n_steps)
@@ -1240,6 +1218,7 @@ names(SIF_TF_lig)[4] <- "Weight"
 write_csv(SIF_TF_lig,file = "results/cosmos/moon/SIF_rec_TFmetab.csv")
 write_csv(ATT_TF_lig,file = "results/cosmos/moon/ATT_rec_TFmetab.csv")
 ```
+
 ```{r combine moon networks}
 combined_SIF_moon <- as.data.frame(rbind(SIF_rec_to_TFmetab, SIF_TF_lig))
 combined_SIF_moon <- unique(combined_SIF_moon)
