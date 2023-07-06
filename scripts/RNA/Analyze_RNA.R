@@ -8,7 +8,7 @@ library(tibble)
 library(proxy)
 library(data.table)
 library(extrafont)
-
+library(OmnipathR)
 # Identify number of cell line clusters -----
 
 # Load transcriptomics
@@ -29,7 +29,8 @@ RNA_metadata <- read_csv(file = "data/metadata/RNA_metadata.csv")
 
 # TF clustering with normalized weighted mean approach (dorothea + decoupleR)
 ## First load ressource
-dorothea_df <- decoupleR::get_collectri()
+# dorothea_df <- decoupleR::get_collectri()
+load("support/dorothea_df.RData")
 ## Calculate TF activities per cell line
 TF_activity <- apply(RNA,2,function(x){
   x <- as.data.frame(x[which(!is.na(x))])
@@ -90,7 +91,7 @@ fviz_nbclust(df, kmeans, method = "wss", k.max = 30) +
   geom_vline(xintercept = 6, linetype = 2) +
   geom_vline(xintercept = 9, linetype = 2)
 
-## --> Optimal number of clusters based on Silhouette is 4 and with the Elbow method no optimal number of clusters can be identified 
+## --> 3 clusters seems to be an alright number based on silhouet, elbow and interpretability needs.
 
 ## Perform k-mean clustering and assign cell lines to clusters (here: explore different numbers based on peaks in Silhouette plot)
 RNA_kmeans <- list()
@@ -106,10 +107,11 @@ TF_activity_cluster_avgNES_reduced <- list()
 TF_activity_cluster_avgrank <- list()
 TF_activity_cluster_avgrank_reduced <- list()
 
-for(i in c(3,4,6,9)) {
-  
+# for(i in c(3,4,6,9)) {
+for(i in c(3)) {  
   #Set seed so assignment to clusters is consistent across multiple runs
   set.seed(12) 
+  print(i)
   RNA_kmeans[[i]] <- kmeans(df, i, iter.max = 10000, nstart = 100)
   
   ## Extract clusters
@@ -222,15 +224,15 @@ for(i in c(3,4,6,9)) {
 lapply(clusters_df[!unlist(lapply(clusters_df,is.null))], function(x) table(x$cluster))
 
 # Compare clusters by top TFs by similarity (Jaccard distance)
-overlap <- data.frame(rbind(NA,data.table::rbindlist(
-  lapply(SD[!unlist(lapply(SD,is.null))], function(x) data.table::data.table(t(x))),
-  fill = TRUE
-), fill=T))[-1,-1]
-overlap[is.na(overlap)] <- 0
-overlap[overlap>0] <- 1
-rownames(overlap) <- c("3","4","6","9")
-colnames(overlap) <- c("3","4","6","9")
-pheatmap(simil(overlap, overlap, method = "Jaccard"), cluster_cols = F, cluster_rows = F, display_numbers = T)
+# overlap <- data.frame(rbind(NA,data.table::rbindlist(
+#   lapply(SD[!unlist(lapply(SD,is.null))], function(x) data.table::data.table(t(x))),
+#   fill = TRUE
+# ), fill=T))[-1,-1]
+# overlap[is.na(overlap)] <- 0
+# overlap[overlap>0] <- 1
+# rownames(overlap) <- c("3","4","6","9")
+# colnames(overlap) <- c("3","4","6","9")
+# pheatmap(simil(overlap, overlap, method = "Jaccard"), cluster_cols = F, cluster_rows = F, display_numbers = T)
 
 # Compare clusters by cell line assignment
 cluster_number <- 3
@@ -251,21 +253,21 @@ lapply(pc_plot[!unlist(lapply(pc_plot,is.null))], function(x) x)
 
 plot.new()
 heatmap_cluster[[3]]
-plot.new()
-heatmap_cluster[[4]]
-plot.new()
-heatmap_cluster[[6]]
-plot.new()
-heatmap_cluster[[9]]
+# plot.new()
+# heatmap_cluster[[4]]
+# plot.new()
+# heatmap_cluster[[6]]
+# plot.new()
+# heatmap_cluster[[9]]
 
 plot.new()
 heatmap_avgNES_reduced[[3]]
-plot.new()
-heatmap_avgNES_reduced[[4]]
-plot.new()
-heatmap_avgNES_reduced[[6]]
-plot.new()
-heatmap_avgNES_reduced[[9]]
+# plot.new()
+# heatmap_avgNES_reduced[[4]]
+# plot.new()
+# heatmap_avgNES_reduced[[6]]
+# plot.new()
+# heatmap_avgNES_reduced[[9]]
 
 # Save optimal cluster result (here: 3)
 write_csv(RNA_metadata_cluster[[3]], file = "data/metadata/RNA_metadata_cluster.csv")
