@@ -292,11 +292,11 @@ RNA <- RNA[rowSums(is.na(RNA))<(dim(RNA)[2]/3),]
 
 # TF clustering with normalized weighted mean approach (dorothea + decoupleR)
 ## First load ressource
-dorothea_df <- decoupleR::get_dorothea(levels = c("A","B","C"))
+# dorothea_df <- decoupleR::get_dorothea(levels = c("A","B","C"))
 
 # Extract number of TFs and mean number of targets per TF depending on gene data set size
 results_table <- list()
-for(i in c(1:dim(RNA)[1])){
+for(i in c(seq(1,dim(RNA)[1],200))){
   
   RNA_sd <- sort(apply(RNA, 1, function(x) sd(x,na.rm = T)), decreasing = T)
   RNA_sd <- RNA_sd[1:i]
@@ -345,22 +345,24 @@ for (i in c(1:length(results_table))) {
 plot <- ggplot(results_table_df, aes(Number_of_genes,Number_of_TFs)) +
   geom_point(color = "blue", size = 0.1) +
   geom_line(aes(color = "Number of TFs")) +
-  geom_line(aes(y=mean+sd, color = "SD of TF targets per TF")) +
+  geom_line(aes(y=sd, color = "SD of TF targets per TF")) +
   geom_point(aes(y = mean, color = "red"), size = 0.1) +
   geom_line(aes(y = mean, color = "Average TF targets per TF")) +
   scale_y_continuous("Number of TFs", breaks = seq(0,230,10), sec.axis = sec_axis(~ ., name = "Average TF targets per TF", breaks = seq(0,230,10))) +
   scale_x_reverse("Number of genes") +
   scale_color_manual(name = "", values = c("Number of TFs" = "blue", "Average TF targets per TF" = "red", "SD of TF targets per TF" = "#FFCCCB")) +
-  ggtitle("Number of identified transcription factors and targets (mean) depending on number of genes") +
+  # ggtitle("Number of identified transcription factors and targets (mean) depending on number of genes") +
   theme_bw() +
+  geom_vline(xintercept = 6000) +
   theme(axis.title.y.left =element_text(colour = "blue"),axis.title.y.right =element_text(colour = "red"),
-        axis.title.x = element_text(family = "Times New Roman"), 
-        axis.title.y = element_text(family = "Times New Roman"), 
-        axis.text = element_text(family = "Times New Roman"), 
-        legend.text = element_text(family = "Times New Roman"), 
-        legend.title = element_text(family = "Times New Roman"))
+        # axis.title.x = element_text(family = "Times New Roman"),
+        # axis.title.y = element_text(family = "Times New Roman"),
+        # axis.text = element_text(family = "Times New Roman"),
+        # legend.text = element_text(family = "Times New Roman"),
+        # legend.title = element_text(family = "Times New Roman"))
+  )
 
-ggsave(file="results/RNA/TF_TFtarget_gene_reduction.pdf", device = "pdf", plot = plot, width = 25, height = 20)
+ggsave(file="results/RNA/TF_TFtarget_gene_reduction.pdf", device = "pdf", plot = plot, width = 5, height = 3)
 
 
 
