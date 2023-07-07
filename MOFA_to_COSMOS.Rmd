@@ -413,7 +413,58 @@ load(file = "support/dorothea_df.RData")
 
 Then, by using decoupleR and prior knowledge networks, we calculate the different regulatory activities inferred by the normalized weighted mean approach. Depending on the task, the minimum number of targets per source varies required to maintain the source in the output (e.g. two targets by definition for ligand-receptor interactions). To calculate activities of master regulons through moon, transcription factor activities estimated by decoupleR and dorothea are used as an input.
 
-```{r Activity estimations}
+```{r RNA across factors, fig.width=4, fig.height=4.3}
+source("scripts/support_pheatmap_colors.R")
+
+RNA <- as.data.frame(weights$RNA) 
+row.names(RNA) <- gsub("_RNA","",row.names(RNA))
+
+RNA_top <- RNA[order(apply(RNA,1,function(x){max(abs(x))}), decreasing = T)[1:25],]
+
+t <- as.vector(t(RNA_top))
+palette1 <- createLinearColors(t[t < 0],withZero = F , maximum = abs(min(t,na.rm = T)) * 10)
+palette2 <- createLinearColors(t[t > 0],withZero = F , maximum = abs(max(t,na.rm = T)) * 10)
+palette <- c(palette1, palette2)
+pheatmap(RNA_top, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315, filename = "results/mofa/mofa_top_RNA.pdf", width = 4, height = 4.3)
+pheatmap(RNA_top, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315)
+```
+
+```{r LR score estimations across factors, fig.width=4, fig.height=4.3}
+# Calculate regulatory activities from Receptor and Ligand network
+ligrec_factors <- run_ulm(mat = as.matrix(RNA), network = ligrec_geneset, .source = set, .target = gene, minsize = 2) 
+ligrec_factors_df <- reshape2::dcast(ligrec_factors, formula = source~condition, value.var = "score")
+row.names(ligrec_factors_df) <- ligrec_factors_df$source
+ligrec_factors_df <- ligrec_factors_df[,-1]
+ligrec_factors_df <- ligrec_factors_df[order(apply(ligrec_factors_df,1,function(x){max(abs(x))}), decreasing = T)[1:25],]
+
+
+
+t <- as.vector(t(ligrec_factors_df))
+palette1 <- createLinearColors(t[t < 0],withZero = F , maximum = abs(min(t,na.rm = T)) * 10)
+palette2 <- createLinearColors(t[t > 0],withZero = F , maximum = abs(max(t,na.rm = T)) * 10)
+palette <- c(palette1, palette2)
+pheatmap(ligrec_factors_df, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315, filename = "results/mofa/mofa_top_ligrec.pdf", width = 4, height = 4.3)
+pheatmap(ligrec_factors_df, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315)
+```
+
+```{r TF activity estimations across factors, fig.width=4, fig.height=4.3}
+# Calculate regulatory activities from TF network
+TF_factors <- run_ulm(mat = as.matrix(RNA), network = dorothea_df, minsize = 10)
+TF_factors <- reshape2::dcast(TF_factors, formula = source~condition, value.var = "score")
+row.names(TF_factors) <- TF_factors$source
+TF_factors <- TF_factors[,-1]
+TF_factors <- TF_factors[order(apply(TF_factors,1,function(x){max(abs(x))}), decreasing = T)[1:25],]
+
+t <- as.vector(t(TF_factors))
+palette1 <- createLinearColors(t[t < 0],withZero = F , maximum = abs(min(t,na.rm = T)) * 10)
+palette2 <- createLinearColors(t[t > 0],withZero = F , maximum = abs(max(t,na.rm = T)) * 10)
+palette <- c(palette1, palette2)
+pheatmap(TF_factors, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315, filename = "results/mofa/mofa_top_TF.pdf", width = 4, height = 4.3)
+pheatmap(TF_factors, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315)
+```
+
+
+```{r Activity estimations for factor 4}
 # Calculate regulatory activities from Receptor and Ligand network
 ligrec_high_vs_low <- run_ulm(mat = as.matrix(RNA), network = ligrec_geneset, .source = set, .target = gene, minsize = 2) 
 ligrec_high_vs_low <- ligrec_high_vs_low[ligrec_high_vs_low$statistic == "ulm",]
