@@ -266,6 +266,7 @@ An initial metric we can explore is the total variance ($R^2$) explained per vie
 ```{r Total variance per factor}
 # Investigate factors: Explained total variance per view
 plot_variance_explained(model, x="group", y="factor", plot_total = T)[[2]]
+calculate_variance_explained(model)
 ```
 
 The bar plot demonstrates that the nine factors for the view RNA explain more than 50% of the variance. In contrast, for both metabolomics as well as proteomics around 20% of the variance can be explained by all factors.
@@ -275,13 +276,15 @@ Since we would like to use the found correlation for downstream COSMOS analysis,
 ```{r Variance per view per factor}
 # Investigate factors: Explained variance per view for each factor 
 pheatmap(model@cache$variance_explained$r2_per_factor[[1]], display_numbers = T, angle_col = "0", legend_labels = c("0","10", "20", "30", "40", "Variance\n\n"), legend = T, main = "", legend_breaks = c(0,10, 20, 30, 40, max(model@cache$variance_explained$r2_per_factor[[1]])), cluster_rows = F, cluster_cols = F, color = colorRampPalette(c("white","red"))(100), fontsize_number = 10)
+pheatmap(model@cache$variance_explained$r2_per_factor[[1]], display_numbers = T, angle_col = "0", legend_labels = c("0","10", "20", "30", "40", "Variance\n\n"), legend = T, main = "", legend_breaks = c(0,10, 20, 30, 40, max(model@cache$variance_explained$r2_per_factor[[1]])), cluster_rows = F, cluster_cols = F, color = colorRampPalette(c("white","red"))(100), fontsize_number = 10,filename = "results/mofa/variance_heatmap.pdf",width = 4, height = 2.5)
 ```
 
 By analyzing this heatmap, we can observe that Factor 1 and 3 explain a large proportion of variance of the RNA, Factor 2 mainly explains the variance of the metabolomics and Factor 3 highlights variability from the proteomics view. Consequently, no factor explains a large portion of the variance across all views. To potentially justify to use different factor weights downstream for different views, we can analyze the correlation between factors. Thus, the next plot highlights the spearman correlation between each factor.
 
 ```{r Correlation between factors}
 # Investigate factors: Correlation between factors 
-plot_factor_cor(model, type = 'upper', method = "spearman", addCoef.col = "grey")
+pdf(file="results/mofa/plot_factor_cor.pdf", height = 5, width = 5)
+plot_factor_cor(model, type = 'upper', method = "spearman", addCoef.col = "black")
 ```
 
 Since the correlation between each factor is relatively low, we have to choose a single factor. In this case, we are going to use Factor 4, since a decent amount of variability from each view is explained.
@@ -325,7 +328,7 @@ Interestingly, with Factor 4, we have a separation of the samples belonging to c
 
 Further, we can inspect the composition of the factors by plotting the top 10 weights per factor and view.
 
-```{r Factor weights per view, fig.height=8, fig.width=5}
+```{r Factor weights per view, fig.height=2.4, fig.width=10}
 ## Top 20 factor weights per view
 grid.arrange(
   ### RNA
@@ -345,7 +348,7 @@ grid.arrange(
                    view = "metab",
                    factor = 4,
                    nfeatures = 10) + 
-    ggtitle("Metabolomics")
+    ggtitle("Metabolomics"), ncol =3
 )
 
 ```
@@ -467,6 +470,40 @@ names(prot_input) <- gsub("_proteo","",names(prot_input))
 
 expressed_genes <- as.data.frame(read_csv("data/RNA/RNA_log2_FPKM_clean.csv"))$Genes #since only complete cases were considered in the first part, here the full gene list is loaded
 ```
+
+We can be interested in looking how RNA and corresponding proteins correlate in each factor.
+We can plot this using scatter plots for each factors.
+```{r correlation RNA/prot, fig.width=7, fig.height=7}
+weights_RNA <- as.data.frame(weights$RNA)
+weights_prot <- as.data.frame(weights$proteo)
+
+weights_prot$ID <- gsub("_proteo$","",row.names(weights_prot))
+weights_RNA$ID <- gsub("_RNA$","",row.names(weights_RNA))
+
+plot_list <- list()
+r2_list <- list()
+for(i in 1:(dim(weights_prot)[2]-1))
+{
+  merged_weights <- merge(weights_RNA[,c(i,10)],weights_prot[,c(i,10)], by = "ID")
+  names(merged_weights) <- c("ID","RNA","prot")
+  r2_list[[i]] <- cor(merged_weights[,2],merged_weights[,3])^2
+  plot_list[[i]] <- ggplot(merged_weights,aes(x = RNA,y = prot)) + geom_point() +
+  geom_smooth(method='lm', formula= y~x) + 
+  theme_minimal() + 
+  theme(axis.title.x=element_blank(),
+      axis.text.x=element_blank(),
+      axis.ticks.x=element_blank(),
+      axis.title.y=element_blank(),
+      axis.text.y=element_blank(),
+      axis.ticks.y=element_blank())
+}
+
+r2_vec <- unlist(r2_list)
+r2_vec
+
+ggsave(filename = "results/mofa/RNA_prot_cor.pdf",plot = do.call("grid.arrange", c(plot_list, ncol = 3)), device = "pdf")
+```
+coherently, only the factors where
 
 Next, we perform filtering steps in order to identify top deregulated features. Here, the individual filtering is based on absolute factor weight or activity score. The first step involves the visualization of the respective distribution to define an appropriate threshold.
 

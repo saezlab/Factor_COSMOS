@@ -38,7 +38,13 @@ ggplot(Prot_log10_SWATH_melted, aes(x = variable, y = value)) + geom_violin() +
 # --> looks already pretty good; to transform back to original values: Prot_log10_SWATH <- (10^Prot_log10_SWATH) - 1 and then perform vsn
 
 Prot_log10_SWATH_clean <- Prot_log10_SWATH
+hist.data <- hist(as.numeric(unlist(Prot_log10_SWATH_clean)), breaks = 1000)
+hist.data$counts = log10(hist.data$counts)
+plot(hist.data, ylim = c(0,6), ylab='log10(Frequency)', xlab = "Prot log10(intensity)")
+
+
 Prot_log10_SWATH_clean[Prot_log10_SWATH_clean==0] <- NA
+dim(Prot_log10_SWATH_clean[rowSums(is.na(Prot_log10_SWATH_clean))<dim(Prot_log10_SWATH_clean)[2]*(1/3),])
 
 Prot_log10_SWATH_clean_melted <- reshape2::melt(Prot_log10_SWATH_clean)
 ggplot(Prot_log10_SWATH_clean_melted, aes(x = variable, y = value)) + geom_violin() + 
@@ -49,6 +55,7 @@ ggplot(Prot_log10_SWATH_clean_melted, aes(x = variable, y = value)) + geom_violi
 # Visualize dataset
 pheatmap(Prot_log10_SWATH_clean[complete.cases(Prot_log10_SWATH_clean),], show_colnames = T, show_rownames = F, cluster_rows = F) 
 
+dim(Prot_log10_SWATH_clean)
 # Save overlapping clean or whole measurements
 Prot_log10_SWATH <- cbind("Proteins" = rownames(Prot_log10_SWATH), Prot_log10_SWATH)
 Prot_log10_SWATH_clean <- cbind("Proteins" = rownames(Prot_log10_SWATH_clean), Prot_log10_SWATH_clean)

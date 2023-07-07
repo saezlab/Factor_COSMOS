@@ -28,6 +28,18 @@ ggplot(metabs, aes(x = cellname, y = log2(mean))) + geom_violin() +
         axis.text.x=element_blank(),
         axis.ticks.x=element_blank())
 
+metabs_wide <- reshape2::dcast(metabs, cellname~TITLE, value.var = "mean") 
+row.names(metabs_wide) <- metabs_wide$cellname
+metabs_wide <- as.data.frame(t(metabs_wide[,-1]))
+dim(metabs_wide)
+metabs_wide[abs(metabs_wide) > 32] <- NA  
+
+
+hist.data <- hist(as.numeric(unlist(metabs_wide)), breaks = 1000)
+hist.data$counts = log10(hist.data$counts)
+plot(hist.data, ylim = c(0,6), ylab='log10(Frequency)', xlab = "Metab log2(intensity)")
+
+
 # Remove extreme values (outliers)
 metabs[abs(log2(metabs$mean)) > 5,"mean"] <- NA  
 
