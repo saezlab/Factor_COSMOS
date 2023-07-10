@@ -416,10 +416,10 @@ Then, by using decoupleR and prior knowledge networks, we calculate the differen
 ```{r RNA across factors, fig.width=4, fig.height=4.3}
 source("scripts/support_pheatmap_colors.R")
 
-RNA <- as.data.frame(weights$RNA) 
-row.names(RNA) <- gsub("_RNA","",row.names(RNA))
+RNA_all <- as.data.frame(weights$RNA) 
+row.names(RNA_all) <- gsub("_RNA","",row.names(RNA_all))
 
-RNA_top <- RNA[order(apply(RNA,1,function(x){max(abs(x))}), decreasing = T)[1:25],]
+RNA_top <- RNA_all[order(apply(RNA_all,1,function(x){max(abs(x))}), decreasing = T)[1:25],]
 
 t <- as.vector(t(RNA_top))
 palette1 <- createLinearColors(t[t < 0],withZero = F , maximum = abs(min(t,na.rm = T)) * 10)
@@ -431,7 +431,7 @@ pheatmap(RNA_top, show_rownames = T, cluster_cols = F, cluster_rows = F,color = 
 
 ```{r LR score estimations across factors, fig.width=4, fig.height=4.3}
 # Calculate regulatory activities from Receptor and Ligand network
-ligrec_factors <- run_ulm(mat = as.matrix(RNA), network = ligrec_geneset, .source = set, .target = gene, minsize = 2) 
+ligrec_factors <- run_ulm(mat = as.matrix(RNA_all), network = ligrec_geneset, .source = set, .target = gene, minsize = 2) 
 ligrec_factors_df <- reshape2::dcast(ligrec_factors, formula = source~condition, value.var = "score")
 row.names(ligrec_factors_df) <- ligrec_factors_df$source
 ligrec_factors_df <- ligrec_factors_df[,-1]
@@ -449,7 +449,7 @@ pheatmap(ligrec_factors_df, show_rownames = T, cluster_cols = F, cluster_rows = 
 
 ```{r TF activity estimations across factors, fig.width=4, fig.height=4.3}
 # Calculate regulatory activities from TF network
-TF_factors <- run_ulm(mat = as.matrix(RNA), network = dorothea_df, minsize = 10)
+TF_factors <- run_ulm(mat = as.matrix(RNA_all), network = dorothea_df, minsize = 10)
 TF_factors <- reshape2::dcast(TF_factors, formula = source~condition, value.var = "score")
 row.names(TF_factors) <- TF_factors$source
 TF_factors <- TF_factors[,-1]
@@ -1110,6 +1110,8 @@ names(RNA_input) <- gsub("_RNA$","",row.names(weights$RNA))
 ```
 
 ```{r Run moon rec_to_TFmetab}
+data("HMDB_mapper_vec")
+
 meta_network_rec_to_TFmetab <- meta_network_compressed
 
 before <- 1
@@ -1136,6 +1138,7 @@ if(i < 10)
   print(paste("Interupted after ",paste(i," iterations. Convergence uncertain.", sep = ""),sep = ""))
 }
 
+
 duplicated_parents_df <- data.frame(duplicated_parents)
 duplicated_parents_df$source_original <- row.names(duplicated_parents_df)
 names(duplicated_parents_df)[1] <- "source"
@@ -1147,6 +1150,27 @@ addons$source_original <- addons$source
 mapping_table <- as.data.frame(rbind(duplicated_parents_df,addons))
 
 recursive_decoupleRnival_res <- merge(recursive_decoupleRnival_res, mapping_table, by = "source")
+
+#save the whole res for later
+moon_res_rec_to_TFmet <- recursive_decoupleRnival_res[,c(4,2,3)]
+moon_res_rec_to_TFmet[,1] <- sapply(moon_res_rec_to_TFmet[,1], function(x, HMDB_mapper_vec) {
+    x <- gsub("Metab__", "", x)
+    x <- gsub("^Gene", "Enzyme", x)
+    suffixe <- stringr::str_extract(x, "_[a-z]$")
+    x <- gsub("_[a-z]$", "", x)
+    if (x %in% names(HMDB_mapper_vec)) {
+      x <- HMDB_mapper_vec[x]
+      x <- paste("Metab__", x, sep = "")
+    }
+    if (!is.na(suffixe)) {
+      x <- paste(x, suffixe, sep = "")
+    }
+    return(x)
+  }, HMDB_mapper_vec = HMDB_mapper_vec)
+
+levels <- recursive_decoupleRnival_res[,c(1,3)]
+
+
 
 levels <- recursive_decoupleRnival_res[,c(4,3)]
 
@@ -1263,6 +1287,22 @@ if(i < 10)
   print(paste("Interupted after ",paste(i," iterations. Convergence uncertain.", sep = ""),sep = ""))
 }
 
+moon_res_TF_lig <-recursive_decoupleRnival_res
+moon_res_TF_lig[,1] <- sapply(moon_res_TF_lig[,1], function(x, HMDB_mapper_vec) {
+    x <- gsub("Metab__", "", x)
+    x <- gsub("^Gene", "Enzyme", x)
+    suffixe <- stringr::str_extract(x, "_[a-z]$")
+    x <- gsub("_[a-z]$", "", x)
+    if (x %in% names(HMDB_mapper_vec)) {
+      x <- HMDB_mapper_vec[x]
+      x <- paste("Metab__", x, sep = "")
+    }
+    if (!is.na(suffixe)) {
+      x <- paste(x, suffixe, sep = "")
+    }
+    return(x)
+  }, HMDB_mapper_vec = HMDB_mapper_vec)
+
 levels <- recursive_decoupleRnival_res[,c(1,3)]
 
 recursive_decoupleRnival_res <- recursive_decoupleRnival_res[,c(1,2)]
@@ -1283,7 +1323,6 @@ SIF_TF_lig <- solution_network$SIF
 names(SIF_TF_lig)[3] <- "sign"
 ATT_TF_lig <- solution_network$ATT
 
-data("HMDB_mapper_vec")
 
 translated_res <- translate_res(SIF_TF_lig,ATT_TF_lig,HMDB_mapper_vec)
 
@@ -1330,6 +1369,9 @@ combined_SIF_moon <- as.data.frame(rbind(combined_SIF_moon, ligrec_ressource_add
 
 write_csv(combined_SIF_moon,file = "results/cosmos/moon/combined_SIF_moon.csv")
 write_csv(combined_ATT_moon,file = "results/cosmos/moon/combined_ATT_moon.csv")
+
+write_csv(moon_res_rec_to_TFmet, file = "results/cosmos/moon/moon_res_rec_to_TFmet.csv")
+write_csv(moon_res_TF_lig, file = "results/cosmos/moon/moon_res_TF_lig.csv")
 ```
 ### Further analyses
 
@@ -1340,7 +1382,6 @@ Further MOFA-COSMOS downstream analyses focusing on analyzing cell line specific
 interesting_nodes <- data.frame("name" = c("VEGFA","HIF1A","PRKCA","BNIP3","DAG1","ACO1","JAK1","ABL1","ITGB1","STAT1","PRKACA","MYC"))
 nodes_cellline_weight_filtered <- nodes_cellline_weight[rownames(nodes_cellline_weight) %in% interesting_nodes$name,]
 ```
-
 
 ### Session info
 
