@@ -58,6 +58,9 @@ library(liana)
 library(GSEABase)
 library(tidyr)
 library(RCy3)
+library(RColorBrewer)
+
+source("scripts/support_pheatmap_colors.R")
 ```
 
 ### From omics data to MOFA ready input
@@ -271,6 +274,7 @@ calculate_variance_explained(model)
 
 The bar plot demonstrates that the nine factors for the view RNA explain more than 50% of the variance. In contrast, for both metabolomics as well as proteomics around 20% of the variance can be explained by all factors.
 
+
 Since we would like to use the found correlation for downstream COSMOS analysis, we first investigate the variance ($R^2$) each factor can explain per view as well as investigate the factor explaining the most variance across all views.
 
 ```{r Variance per view per factor}
@@ -326,6 +330,63 @@ plot_factor(model,
 
 Interestingly, with Factor 4, we have a separation of the samples belonging to cluster 2 from samples of cluster 1 and 3. Taking into account that this factor mainly explains the variation in the RNA view, the samples are classifiable into the clusters especially by transcriptomics. This is expected since the assignment of the samples was done based on transcription factor clustering via transcriptomics. Thus, it was shown that the original structure of the data was conserved in the low-dimensional representation via factors.
 
+```{r tissue type analysis}
+NCI_60_metadata <- as.data.frame(read_csv(file = "data/metadata/RNA_metadata_cluster.csv"))
+NCI_60_metadata$`age over 50` <- NCI_60_metadata$`age a` > 50
+tissues <-NCI_60_metadata[,c(3,1)]
+names(tissues) <- c("source","target")
+
+  
+Z_matrix <- as.data.frame(model@expectations$Z$single_group)
+
+tissue_enrichment <- decoupleR::run_ulm(Z_matrix, tissues)
+tissue_enrichment <- reshape2::dcast(tissue_enrichment, source~condition, value.var = "score")
+row.names(tissue_enrichment) <- tissue_enrichment$source
+tissue_enrichment <- tissue_enrichment[,-1]
+
+t <- as.vector(t(tissue_enrichment))
+palette1 <- createLinearColors(t[t < 0],withZero = F , maximum = abs(min(t,na.rm = T)) * 10)
+palette2 <- createLinearColors(t[t > 0],withZero = F , maximum = abs(max(t,na.rm = T)) * 10)
+palette <- c(palette1, palette2)
+pheatmap(t(tissue_enrichment), show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315,display_numbers = F, filename = "results/mofa/mofa_tissue_enrichment.pdf", width = 3, height = 2.6)
+pheatmap(tissue_enrichment, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315,display_numbers = T)
+```
+
+```{r all metadata analysis}
+all_metadata <- reshape2::melt(NCI_60_metadata[,c(1,3,17,5,7,8,10,13,14)], id.vars = "cell_line")
+all_metadata$variable <- gsub(" a$","",all_metadata$variable)
+all_metadata$variable <- gsub(" a,c$","",all_metadata$variable)
+all_metadata$variable <- gsub(" d$","",all_metadata$variable)
+all_metadata$variable <- gsub("histology","histo",all_metadata$variable)
+all_metadata$variable <- gsub("tissue of origin","tissue",all_metadata$variable)
+all_metadata$value <- gsub("[(]81-103[)]","",all_metadata$value)
+all_metadata$value <- gsub("[(]35-57[)]","",all_metadata$value)
+all_metadata$value <- gsub("Memorial Sloan Kettering Cancer Center","Memorial SKCC",all_metadata$value)
+all_metadata$value <- gsub("Malignant melanotic melanoma","Malig. melanotic melan.",all_metadata$value)
+all_metadata$value <- gsub("Ductal carcinoma-mammary gland","Duct. carci-mam. gland",all_metadata$value)
+
+all_metadata$target <- paste(all_metadata$variable, all_metadata$value, sep = ": ")
+all_metadata <- all_metadata[,c(4,1)]
+names(all_metadata) <- c("source","target")
+  
+Z_matrix <- as.data.frame(model@expectations$Z$single_group)
+
+all_metadata_enrichment <- decoupleR::run_ulm(Z_matrix, all_metadata, minsize = 3)
+all_metadata_enrichment <- reshape2::dcast(all_metadata_enrichment, source~condition, value.var = "score")
+row.names(all_metadata_enrichment) <- all_metadata_enrichment$source
+all_metadata_enrichment <- all_metadata_enrichment[,-1]
+all_metadata_enrichment_top <- all_metadata_enrichment[
+  apply(all_metadata_enrichment, 1, function(x){max(abs(x)) > 2}),
+]
+
+t <- as.vector(t(all_metadata_enrichment_top))
+palette1 <- createLinearColors(t[t < 0],withZero = F , maximum = abs(min(t,na.rm = T)) * 10)
+palette2 <- createLinearColors(t[t > 0],withZero = F , maximum = abs(max(t,na.rm = T)) * 10)
+palette <- c(palette1, palette2)
+pheatmap(t(all_metadata_enrichment_top), show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315,display_numbers = F, filename = "results/mofa/mofa_metadata_enrichment.pdf", width = 4.5, height = 4)
+pheatmap(t(all_metadata_enrichment_top), show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315,display_numbers = T)
+```
+
 Further, we can inspect the composition of the factors by plotting the top 10 weights per factor and view.
 
 ```{r Factor weights per view, fig.height=2.4, fig.width=10}
@@ -357,7 +418,7 @@ Using this visualization, features with strong association with the factor (larg
 
 Moreover, we can use heatmaps to highlight the coordinated heterogeneity that MOFA captures in the original data and define clusters by hierarchical clustering. Here, for example, the heatmap for Factor 4 of the RNA view using the top 25 feature is shown and hierarchical clustering with complete linkage is performed. Additionally, the cluster assignment of each sample is depicted.
 
-```{r Heatmap RNA view factor 2}
+```{r Heatmap RNA view factor 4}
 anno_colors <- list(
   "1"="red", "2"="cyan", "3"="orange"
 )
@@ -414,7 +475,7 @@ load(file = "support/dorothea_df.RData")
 Then, by using decoupleR and prior knowledge networks, we calculate the different regulatory activities inferred by the normalized weighted mean approach. Depending on the task, the minimum number of targets per source varies required to maintain the source in the output (e.g. two targets by definition for ligand-receptor interactions). To calculate activities of master regulons through moon, transcription factor activities estimated by decoupleR and dorothea are used as an input.
 
 ```{r RNA across factors, fig.width=4, fig.height=4.3}
-source("scripts/support_pheatmap_colors.R")
+
 
 RNA_all <- as.data.frame(weights$RNA) 
 row.names(RNA_all) <- gsub("_RNA","",row.names(RNA_all))
