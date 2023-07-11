@@ -1,0 +1,149 @@
+---
+title: "network_comparisons"
+author: "Pascal Lafrenz and Aurelien Dugourd"
+date: "`r Sys.Date()`"
+output:
+  md_document:
+    variant: gfm
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(readr)
+library(dplyr)
+library(cosmosR)
+```
+
+```{r}
+data("HMDB_mapper_vec")
+
+moon_res_rec_to_TFmet <- as.data.frame(
+  read_csv("results/cosmos/moon/moon_res_rec_to_TFmet.csv"))
+names(moon_res_rec_to_TFmet)[1] <- "source"
+moon_res_TF_lig <- as.data.frame(
+  read_csv("results/cosmos/moon/moon_res_TF_lig.csv"))
+
+moon_combined <- as.data.frame(rbind(moon_res_rec_to_TFmet, moon_res_TF_lig))
+moon_combined <- moon_combined %>% group_by(source) %>% summarise_each(funs(sum(., na.rm = TRUE)))
+moon_combined <- as.data.frame(moon_combined)
+
+SIF_COSMOS_combined_reduced <- as.data.frame(
+  read_csv("results/cosmos/SIF_mofamoon_combined_reduced.csv"))
+
+ATT_COSMOS_combined_reduced <- as.data.frame(
+  read_csv("results/cosmos/ATT_mofamoon_combined_reduced.csv"))
+
+meta_network_rec_to_TFmetab <- as.data.frame(
+  read_csv("results/cosmos/moon/meta_network_filtered.csv"))
+meta_network_TF_lig <- as.data.frame(
+  read_csv("results/cosmos/moon/meta_network_TF_lig.csv"))
+combined_meta_network <- as.data.frame(
+  rbind(meta_network_rec_to_TFmetab,meta_network_TF_lig)
+)
+
+combined_meta_network[, 1] <- sapply(combined_meta_network[, 1], function(x, HMDB_mapper_vec) {
+        x <- gsub("Metab__", "", x)
+        x <- gsub("^Gene", "Enzyme", x)
+        suffixe <- stringr::str_extract(x, "_[a-z]$")
+        x <- gsub("_[a-z]$", "", x)
+        if (x %in% names(HMDB_mapper_vec)) {
+            x <- HMDB_mapper_vec[x]
+            x <- paste("Metab__", x, sep = "")
+        }
+        if (!is.na(suffixe)) {
+            x <- paste(x, suffixe, sep = "")
+        }
+        return(x)
+    }, HMDB_mapper_vec = HMDB_mapper_vec)
+
+combined_meta_network[, 2] <- sapply(combined_meta_network[, 2], function(x, HMDB_mapper_vec) {
+        x <- gsub("Metab__", "", x)
+        x <- gsub("^Gene", "Enzyme", x)
+        suffixe <- stringr::str_extract(x, "_[a-z]$")
+        x <- gsub("_[a-z]$", "", x)
+        if (x %in% names(HMDB_mapper_vec)) {
+            x <- HMDB_mapper_vec[x]
+            x <- paste("Metab__", x, sep = "")
+        }
+        if (!is.na(suffixe)) {
+            x <- paste(x, suffixe, sep = "")
+        }
+        return(x)
+    }, HMDB_mapper_vec = HMDB_mapper_vec)
+```
+
+```{r}
+sum(ATT_COSMOS_combined_reduced$Nodes %in% moon_combined$source)
+
+ATT_COSMOS_combined_reduced[!(ATT_COSMOS_combined_reduced$Nodes %in% moon_combined$source),]
+```
+Some nodes are not in moon network. They were pruned out by moon because their estimation score as input didn't match the infered activity by moon.
+
+```{r}
+compare_moon_carnival <- merge(ATT_COSMOS_combined_reduced[,c(1,9)],moon_combined,by.x = "Nodes",by.y = "source")
+compare_moon_carnival$sign_coherence <- sign(compare_moon_carnival$sign_activity) == sign(compare_moon_carnival$score)
+
+sum(compare_moon_carnival$sign_coherence)
+sum(compare_moon_carnival$sign_coherence) / dim(compare_moon_carnival)[1]
+```
+
+```{r}
+write_csv(combined_meta_network, file = "results/cosmos/moon/meta_network_combined_translated.csv")
+
+to_map <-  merge(ATT_COSMOS_combined_reduced[,c(1,9)],moon_combined,by.x = "Nodes",by.y = "source", all.y = T)
+names(to_map) <- c("Nodes","CARNIVAL","moon","moon_level")
+
+write_csv(combined_meta_network, file = "results/cosmos/moon/meta_network_combined_translated.csv")
+write_csv(to_map, file = "results/cosmos/moon/ATT_to_compare.csv")
+
+```
+
+```{r}
+nodes_not_carnival <- unique(c(combined_meta_network$source,combined_meta_network$target))
+nodes_not_carnival <- nodes_not_carnival[!nodes_not_carnival %in% ATT_COSMOS_combined_reduced$Nodes]
+
+nodes_predicted_carnival <- ATT_COSMOS_combined_reduced[ATT_COSMOS_combined_reduced$measured == 0,1]
+
+mean(abs(moon_combined[moon_combined$source %in% nodes_predicted_carnival,"score"]))
+mean(abs(moon_combined[moon_combined$source %in% nodes_not_carnival,"score"]))
+```
+
+```{r}
+combined_SIF_moon <- as.data.frame(read_csv("results/cosmos/moon/combined_SIF_moon.csv"))
+names(combined_SIF_moon)[c(1,2,3)] <- c("Node1","Node2","Sign")
+combined_ATT_moon <- as.data.frame(read_csv("results/cosmos/moon/combined_ATT_moon.csv"))
+
+length(intersect(combined_ATT_moon$Nodes, ATT_COSMOS_combined_reduced$Nodes))
+```
+
+```{r}
+SIF_carnival_moon <- as.data.frame(rbind(combined_SIF_moon[,c(1,2,3)], SIF_COSMOS_combined_reduced[,c(1,2,3)]))
+# SIF_carnival_moon$edgeID <- paste(SIF_carnival_moon$Node1,SIF_carnival_moon$Node2, sep = "_")
+SIF_carnival_moon <- unique(SIF_carnival_moon)
+
+ATT_carnival_moon <- merge(combined_ATT_moon[,c(1,2)],ATT_COSMOS_combined_reduced[,c(1,6)], by = "Nodes", all = T)
+names(ATT_carnival_moon)[c(2,3)] <- c("MOON","CARNIVAL")
+ATT_carnival_moon$MOON <- sign(ATT_carnival_moon$MOON)
+ATT_carnival_moon$CARNIVAL <- sign(ATT_carnival_moon$CARNIVAL)
+ATT_carnival_moon[is.na(ATT_carnival_moon$MOON),"MOON"] <- 0
+ATT_carnival_moon[is.na(ATT_carnival_moon$CARNIVAL),"CARNIVAL"] <- 0
+
+write_csv(SIF_carnival_moon, file = "results/cosmos/moon/SIF_carnival_moon.csv")
+write_csv(ATT_carnival_moon, file = "results/cosmos/moon/ATT_carnival_moon.csv")
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```

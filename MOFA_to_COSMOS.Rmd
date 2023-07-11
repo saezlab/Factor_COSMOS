@@ -1121,7 +1121,7 @@ expressed_genes <- setNames(rep(1,length(expressed_genes[,1])), expressed_genes$
 meta_network_filtered <- cosmosR:::filter_pkn_expressed_genes(names(expressed_genes), meta_pkn = meta_network)
 
 ##format metab inputs
-metab_inputs <- as.numeric(scale(weights$metab[,4]))
+metab_inputs <- as.numeric(scale(weights$metab[,4], center = F))
 names(metab_inputs) <- row.names(weights$metab)
 
 metab_to_HMDB <- as.data.frame(
@@ -1135,7 +1135,7 @@ metab_inputs <- cosmosR::prepare_metab_inputs(metab_inputs, compartment_codes = 
 #prepare upstream inputs
 upstream_inputs <- c(rec_inputs) #the upstream input should be filtered for most significant
 
-downstream_inputs <- c(metab_inputs, ligrec_TF_moon_inputs$TF) #the downstream input should be complete
+downstream_inputs <- c(metab_inputs, scale(ligrec_TF_moon_inputs$TF, center = F)) #the downstream input should be complete
 
 upstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(upstream_inputs, meta_network_filtered)
 downstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(downstream_inputs, meta_network_filtered)
@@ -1153,14 +1153,14 @@ downstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(downstream
 meta_network_filtered <- cosmosR:::keep_observable_neighbours(meta_network_filtered, n_steps, names(downstream_inputs_filtered))
 upstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(upstream_inputs_filtered, meta_network_filtered)
 
+write_csv(meta_network_filtered, file = "results/cosmos/moon/meta_network_filtered.csv")
+
 #compress the network to avoid redundant master controllers
 meta_network_compressed_list <- compress_same_children(meta_network_filtered, sig_input = upstream_inputs_filtered, metab_input = downstream_inputs_filtered)
 
 meta_network_compressed <- meta_network_compressed_list$compressed_network
 
-node_signatures <- meta_network_compressed_list$node_signatures
 
-duplicated_parents <- meta_network_compressed_list$duplicated_signatures
 
 meta_network_compressed <- meta_network_cleanup(meta_network_compressed)
 
@@ -1199,7 +1199,8 @@ if(i < 10)
   print(paste("Interupted after ",paste(i," iterations. Convergence uncertain.", sep = ""),sep = ""))
 }
 
-
+node_signatures <- meta_network_compressed_list$node_signatures
+duplicated_parents <- meta_network_compressed_list$duplicated_signatures
 duplicated_parents_df <- data.frame(duplicated_parents)
 duplicated_parents_df$source_original <- row.names(duplicated_parents_df)
 names(duplicated_parents_df)[1] <- "source"
@@ -1207,6 +1208,12 @@ names(duplicated_parents_df)[1] <- "source"
 addons <- data.frame(names(node_signatures)[-which(names(node_signatures) %in% duplicated_parents_df$source_original)]) 
 names(addons)[1] <- "source"
 addons$source_original <- addons$source
+
+final_leaves <- meta_network_rec_to_TFmetab[!(meta_network_rec_to_TFmetab$target %in% meta_network_rec_to_TFmetab$source),"target"]
+final_leaves <- as.data.frame(cbind(final_leaves,final_leaves))
+names(final_leaves) <- names(addons)
+
+addons <- as.data.frame(rbind(addons,final_leaves))
 
 mapping_table <- as.data.frame(rbind(duplicated_parents_df,addons))
 
@@ -1324,6 +1331,8 @@ names(RNA_input) <- gsub("_RNA$","",row.names(weights$RNA))
 ```{r run moon TF to lig}
 meta_network_TF_lig <- dorothea_PKN_filtered
 
+write_csv(meta_network_TF_lig, file = "results/cosmos/moon/meta_network_TF_lig.csv")
+
 before <- 1
 after <- 0
 i <- 1
@@ -1416,8 +1425,8 @@ combined_ATT_moon <- combined_ATT_moon %>% group_by(Nodes) %>% summarise_each(fu
 combined_ATT_moon <- as.data.frame(combined_ATT_moon)
 
 ligrec_ressource_addon <- ligrec_ressource[
-  ligrec_ressource$source_genesymbol %in% combined_SIF_moon$source &
-    ligrec_ressource$target_genesymbol %in% combined_SIF_moon$target
+  ligrec_ressource$source_genesymbol %in% combined_SIF_moon$target &
+    ligrec_ressource$target_genesymbol %in% combined_SIF_moon$source
 , c(10,12)]
 ligrec_ressource_addon$sign <- 1
 ligrec_ressource_addon$Weight <- 1
@@ -1441,7 +1450,7 @@ Further MOFA-COSMOS downstream analyses focusing on analyzing cell line specific
 ```{r Select sub pathway nodes}
 ## Select nodes 
 interesting_nodes <- data.frame("name" = c("VEGFA","HIF1A","PRKCA","BNIP3","DAG1","ACO1","JAK1","ABL1","ITGB1","STAT1","PRKACA","MYC"))
-nodes_cellline_weight_filtered <- nodes_cellline_weight[rownames(nodes_cellline_weight) %in% interesting_nodes$name,]
+# nodes_cellline_weight_filtered <- nodes_cellline_weight[rownames(nodes_cellline_weight) %in% interesting_nodes$name,]
 ```
 
 ### Session info
