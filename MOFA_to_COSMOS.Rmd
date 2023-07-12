@@ -1135,7 +1135,10 @@ metab_inputs <- cosmosR::prepare_metab_inputs(metab_inputs, compartment_codes = 
 #prepare upstream inputs
 upstream_inputs <- c(rec_inputs) #the upstream input should be filtered for most significant
 
-downstream_inputs <- c(metab_inputs, scale(ligrec_TF_moon_inputs$TF, center = F)) #the downstream input should be complete
+TF_inputs <- scale(ligrec_TF_moon_inputs$TF, center = F)
+TF_inputs <- setNames(TF_inputs[,1], row.names(TF_inputs))
+
+downstream_inputs <- c(metab_inputs, TF_inputs) #the downstream input should be complete
 
 upstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(upstream_inputs, meta_network_filtered)
 downstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(downstream_inputs, meta_network_filtered)
@@ -1283,6 +1286,7 @@ names(SIF_rec_to_TFmetab)[4] <- "Weight"
 write_csv(SIF_rec_to_TFmetab,file = "results/cosmos/moon/SIF_rec_TFmetab.csv")
 write_csv(ATT_rec_to_TFmetab,file = "results/cosmos/moon/ATT_rec_TFmetab.csv")
 ```
+
 ```{r Prepare moon input for receptor to TFs and metabs}
 ##filter expressed genes from PKN
 
@@ -1303,6 +1307,10 @@ lig_inputs <- tapply(lig_inputs, names(lig_inputs), mean)
 ligands <- names(lig_inputs)
 lig_inputs <- as.numeric(lig_inputs)
 names(lig_inputs) <- ligands
+
+lig_inputs <- scale(lig_inputs, center = F)
+lig_inputs <- setNames(lig_inputs[,1], row.names(lig_inputs))
+
 downstream_inputs <- lig_inputs #the downstream input should be complete
 
 upstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(upstream_inputs, dorothea_PKN_filtered)

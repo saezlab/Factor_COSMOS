@@ -28,7 +28,7 @@ moon_res_TF_lig <- as.data.frame(
   read_csv("results/cosmos/moon/moon_res_TF_lig.csv"))
 
 moon_combined <- as.data.frame(rbind(moon_res_rec_to_TFmet, moon_res_TF_lig))
-moon_combined <- moon_combined %>% group_by(source) %>% summarise_each(funs(sum(., na.rm = TRUE)))
+moon_combined <- moon_combined %>% group_by(source) %>% summarise_each(funs(mean(., na.rm = TRUE)))
 moon_combined <- as.data.frame(moon_combined)
 
 SIF_COSMOS_combined_reduced <- as.data.frame(
@@ -74,6 +74,8 @@ combined_meta_network[, 2] <- sapply(combined_meta_network[, 2], function(x, HMD
         }
         return(x)
     }, HMDB_mapper_vec = HMDB_mapper_vec)
+
+write_csv(combined_meta_network, file = "results/cosmos/moon/combined_meta_network_translated.csv")
 ```
 
 ```{r}
@@ -110,6 +112,13 @@ nodes_predicted_carnival <- ATT_COSMOS_combined_reduced[ATT_COSMOS_combined_redu
 
 mean(abs(moon_combined[moon_combined$source %in% nodes_predicted_carnival,"score"]))
 mean(abs(moon_combined[moon_combined$source %in% nodes_not_carnival,"score"]))
+```
+
+```{r}
+compare_moon_carnival_predicted <- compare_moon_carnival[compare_moon_carnival$Nodes %in% nodes_predicted_carnival,]
+
+sum(compare_moon_carnival_predicted$sign_coherence)
+sum(compare_moon_carnival_predicted$sign_coherence) / dim(compare_moon_carnival_predicted)[1]
 ```
 
 ```{r}
