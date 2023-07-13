@@ -1,6 +1,6 @@
 ---
 title: "network_comparisons"
-author: "Pascal Lafrenz and Aurelien Dugourd"
+author: "Aurelien Dugourd"
 date: "`r Sys.Date()`"
 output:
   md_document:
@@ -30,6 +30,8 @@ moon_res_TF_lig <- as.data.frame(
 moon_combined <- as.data.frame(rbind(moon_res_rec_to_TFmet, moon_res_TF_lig))
 moon_combined <- moon_combined %>% group_by(source) %>% summarise_each(funs(mean(., na.rm = TRUE)))
 moon_combined <- as.data.frame(moon_combined)
+
+write_csv(moon_combined, file = "results/cosmos/moon/full_moon_res_combined.csv")
 
 SIF_COSMOS_combined_reduced <- as.data.frame(
   read_csv("results/cosmos/SIF_mofamoon_combined_reduced.csv"))
