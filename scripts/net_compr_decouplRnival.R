@@ -3,7 +3,7 @@ library(ocean)
 library(reshape2)
 library(readr)
 
-source("scripts/translate_res.R")
+# source("scripts/translate_res.R")
 
 data("meta_network")
 
@@ -62,12 +62,11 @@ after <- 0
 i <- 1
 while (before != after & i < 10) {
   before <- length(meta_network_TF_to_metab[,1])
-  recursive_decoupleRnival_res <- decoupleRnival(upstream_input = sig_input, 
+  recursive_decoupleRnival_res <- moon(upstream_input = sig_input, 
                                                  downstream_input = metab_input, 
                                                  meta_network = meta_network_TF_to_metab, 
                                                  n_layers = n_steps, 
-                                                 n_perm = 100, 
-                                                 statistic = "wmean") # 1000 is better for definitive results
+                                                 statistic = "ulm") # 1000 is better for definitive results
   
   meta_network_TF_to_metab <- filter_incohrent_TF_target(recursive_decoupleRnival_res, dorothea_reg, meta_network_TF_to_metab, RNA_input)
   after <- length(meta_network_TF_to_metab[,1])
@@ -85,6 +84,8 @@ if(i < 10)
 #####
 # write_csv(recursive_decoupleRnival_res, file = paste("results/decoupleRnival/",paste(cell_line, "_ATT_decouplerino_full.csv",sep = ""), sep = ""))
 
+node_signatures <- meta_network_compressed_list$node_signatures
+duplicated_parents <- meta_network_compressed_list$duplicated_signatures
 duplicated_parents_df <- data.frame(duplicated_parents)
 duplicated_parents_df$source_original <- row.names(duplicated_parents_df)
 names(duplicated_parents_df)[1] <- "source"
@@ -93,10 +94,16 @@ addons <- data.frame(names(node_signatures)[-which(names(node_signatures) %in% d
 names(addons)[1] <- "source"
 addons$source_original <- addons$source
 
+final_leaves <- meta_network_TF_to_metab[!(meta_network_TF_to_metab$target %in% meta_network_TF_to_metab$source),"target"]
+final_leaves <- as.data.frame(cbind(final_leaves,final_leaves))
+names(final_leaves) <- names(addons)
+
+addons <- as.data.frame(rbind(addons,final_leaves))
+
 mapping_table <- as.data.frame(rbind(duplicated_parents_df,addons))
 
 recursive_decoupleRnival_res <- merge(recursive_decoupleRnival_res, mapping_table, by = "source")
-recursive_decoupleRnival_res <- recursive_decoupleRnival_res[,c(3,2)]
+recursive_decoupleRnival_res <- recursive_decoupleRnival_res[,c(4,2)]
 names(recursive_decoupleRnival_res)[1] <- "source"
 
 plot(density(recursive_decoupleRnival_res$score))
