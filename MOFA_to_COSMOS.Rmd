@@ -15,9 +15,9 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ### Installation and dependency
 
-COSMOS is dependent on CARNIVAL for exhibiting the signalling pathway optimization. CARNIVAL requires the interactive version of IBM Cplex or CBC-COIN solver as the network optimizer. The IBM ILOG Cplex is freely available through Academic Initiative [here](https://community.ibm.com/community/user/datascience/blogs/xavier-nodet1/2020/07/09/cplex-free-for-students). As an alternative, the CBC solver is open source and freely available for any user, but has a significantly lower performance than CPLEX. The CBC executable can be find under cbc/. Alternatively for small networks, users can rely on the freely available lpSolve R-package, which is automatically installed with the package.
+The legacy network optimisation of COSMOS is done through CARNIVAL. CARNIVAL requires the interactive version of IBM Cplex or CBC-COIN solver as the network optimizer. The IBM ILOG Cplex is freely available through Academic Initiative [here](https://community.ibm.com/community/user/datascience/blogs/xavier-nodet1/2020/07/09/cplex-free-for-students). As an alternative, the CBC solver is open source and freely available for any user, but has a significantly lower performance than CPLEX. The CBC executable can be find under cbc/. Alternatively for small networks, users can rely on the freely available lpSolve R-package, which is automatically installed with the package.
 
-In this tutorial we use *CPLEX* which is strongly recommended.
+In this tutorial we use *CPLEX* for means of comparison with the newer MOON function that doesn't rely on optimisation.
 
 ```{r COSMOS installation, message=FALSE}
 # Install cosmosR from bioconductor (stable version)
@@ -29,7 +29,7 @@ if (!requireNamespace("devtools", quietly = TRUE)) install.packages("devtools")
 if (!requireNamespace("cosmosR", quietly = TRUE)) devtools::install_github("saezlab/cosmosR")
 ```
 
-We are using MOFA2 (Argelaguet et al., 2018) to find correlation between different omics and use its output (factors) to restrict COSMOS input. However, since we are using the python version of MOFA2, please make sure to have [mofapy2](https://github.com/bioFAM/mofapy2) as well as panda and numpy installed in your (conda) environment (e.g. by using reticulate: reticulate::use_condaenv("base", required = T) %\>% reticulate::conda_install(c("mofapy2","panda","numpy")). For downstream analysis, the R version of MOFA2 is used.
+We are using MOFA2 (Argelaguet et al., 2018) to find decompose variance across different omics and use COSMOS to find mechanistic interpretations of its factors. However, since we are using the python version of MOFA2, please make sure to have [mofapy2](https://github.com/bioFAM/mofapy2) as well as panda and numpy installed in your (conda) environment (e.g. by using reticulate: reticulate::use_condaenv("base", required = T) %\>% reticulate::conda_install(c("mofapy2","panda","numpy")). For downstream analysis, the R version of MOFA2 is used.
 
 ```{r MOFA2 installation, message=FALSE}
 # Install MOFA2 from bioconductor (stable version)
