@@ -1110,7 +1110,7 @@ Here, a potential output of this analysis highlighting a sub pathway is shown.
 
 ### MOON (meta footprint analysis) as a CANRIVAL alternative
 
-```{r Prepare moon input for receptor to TFs and metabs}
+```{r Prepare moon input for receptor to TFs and metabs (MOON)}
 ##filter expressed genes from PKN
 data("meta_network")
 

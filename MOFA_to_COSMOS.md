@@ -64,6 +64,9 @@ library(liana)
 library(GSEABase)
 library(tidyr)
 library(RCy3)
+library(RColorBrewer)
+
+source("scripts/support_pheatmap_colors.R")
 ```
 
 ### From omics data to MOFA ready input
@@ -301,6 +304,34 @@ plot_variance_explained(model, x="group", y="factor", plot_total = T)[[2]]
 
 ![](MOFA_to_COSMOS_files/figure-gfm/Total%20variance%20per%20factor-1.png)<!-- -->
 
+``` r
+calculate_variance_explained(model)
+```
+
+    ## $r2_total
+    ## $single_group
+    ##      RNA    metab   proteo 
+    ## 59.59992 18.70369 23.29474 
+    ## 
+    ## attr(,"class")
+    ## [1] "relistable" "list"      
+    ## 
+    ## $r2_per_factor
+    ## $single_group
+    ##                RNA        metab       proteo
+    ## Factor1 24.0201682  0.002979224  0.214741826
+    ## Factor2  4.4849965 14.093737072  2.236180823
+    ## Factor3  0.2777266  2.193923605 12.875906515
+    ## Factor4  7.3683342  2.461682919  4.752507250
+    ## Factor5 13.2330359  0.008854678  0.004884149
+    ## Factor6  2.3102555  0.001537887  2.692284962
+    ## Factor7  4.5839551  0.007795120  0.390045680
+    ## Factor8  2.8171650  0.277818450  0.210418704
+    ## Factor9  1.9469859  0.004198608  0.003992617
+    ## 
+    ## attr(,"class")
+    ## [1] "relistable" "list"
+
 The bar plot demonstrates that the nine factors for the view RNA explain
 more than 50% of the variance. In contrast, for both metabolomics as
 well as proteomics around 20% of the variance can be explained by all
@@ -318,6 +349,10 @@ pheatmap(model@cache$variance_explained$r2_per_factor[[1]], display_numbers = T,
 
 ![](MOFA_to_COSMOS_files/figure-gfm/Variance%20per%20view%20per%20factor-1.png)<!-- -->
 
+``` r
+pheatmap(model@cache$variance_explained$r2_per_factor[[1]], display_numbers = T, angle_col = "0", legend_labels = c("0","10", "20", "30", "40", "Variance\n\n"), legend = T, main = "", legend_breaks = c(0,10, 20, 30, 40, max(model@cache$variance_explained$r2_per_factor[[1]])), cluster_rows = F, cluster_cols = F, color = colorRampPalette(c("white","red"))(100), fontsize_number = 10,filename = "results/mofa/variance_heatmap.pdf",width = 4, height = 2.5)
+```
+
 By analyzing this heatmap, we can observe that Factor 1 and 3 explain a
 large proportion of variance of the RNA, Factor 2 mainly explains the
 variance of the metabolomics and Factor 3 highlights variability from
@@ -329,10 +364,9 @@ correlation between each factor.
 
 ``` r
 # Investigate factors: Correlation between factors 
-plot_factor_cor(model, type = 'upper', method = "spearman", addCoef.col = "grey")
+pdf(file="results/mofa/plot_factor_cor.pdf", height = 5, width = 5)
+plot_factor_cor(model, type = 'upper', method = "spearman", addCoef.col = "black")
 ```
-
-![](MOFA_to_COSMOS_files/figure-gfm/Correlation%20between%20factors-1.png)<!-- -->
 
 Since the correlation between each factor is relatively low, we have to
 choose a single factor. In this case, we are going to use Factor 4,
@@ -402,6 +436,75 @@ was done based on transcription factor clustering via transcriptomics.
 Thus, it was shown that the original structure of the data was conserved
 in the low-dimensional representation via factors.
 
+``` r
+NCI_60_metadata <- as.data.frame(read_csv(file = "data/metadata/RNA_metadata_cluster.csv"))
+```
+
+    ## Rows: 60 Columns: 16
+    ## ── Column specification ────────────────────────────────────────────────────────
+    ## Delimiter: ","
+    ## chr (12): cell_line, tissue of origin a, sex a, prior treatment a,b, Epithel...
+    ## dbl  (4): cluster, age a, mdr f, doubling time g
+    ## 
+    ## ℹ Use `spec()` to retrieve the full column specification for this data.
+    ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+
+``` r
+NCI_60_metadata$`age over 50` <- NCI_60_metadata$`age a` > 50
+tissues <-NCI_60_metadata[,c(3,1)]
+names(tissues) <- c("source","target")
+
+  
+Z_matrix <- as.data.frame(model@expectations$Z$single_group)
+
+tissue_enrichment <- decoupleR::run_ulm(Z_matrix, tissues)
+tissue_enrichment <- reshape2::dcast(tissue_enrichment, source~condition, value.var = "score")
+row.names(tissue_enrichment) <- tissue_enrichment$source
+tissue_enrichment <- tissue_enrichment[,-1]
+
+t <- as.vector(t(tissue_enrichment))
+palette1 <- createLinearColors(t[t < 0],withZero = F , maximum = abs(min(t,na.rm = T)) * 10)
+palette2 <- createLinearColors(t[t > 0],withZero = F , maximum = abs(max(t,na.rm = T)) * 10)
+palette <- c(palette1, palette2)
+pheatmap(t(tissue_enrichment), show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315,display_numbers = F, filename = "results/mofa/mofa_tissue_enrichment.pdf", width = 3, height = 2.6)
+pheatmap(tissue_enrichment, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315,display_numbers = T)
+```
+
+``` r
+all_metadata <- reshape2::melt(NCI_60_metadata[,c(1,3,17,5,7,8,10,13,14)], id.vars = "cell_line")
+all_metadata$variable <- gsub(" a$","",all_metadata$variable)
+all_metadata$variable <- gsub(" a,c$","",all_metadata$variable)
+all_metadata$variable <- gsub(" d$","",all_metadata$variable)
+all_metadata$variable <- gsub("histology","histo",all_metadata$variable)
+all_metadata$variable <- gsub("tissue of origin","tissue",all_metadata$variable)
+all_metadata$value <- gsub("[(]81-103[)]","",all_metadata$value)
+all_metadata$value <- gsub("[(]35-57[)]","",all_metadata$value)
+all_metadata$value <- gsub("Memorial Sloan Kettering Cancer Center","Memorial SKCC",all_metadata$value)
+all_metadata$value <- gsub("Malignant melanotic melanoma","Malig. melanotic melan.",all_metadata$value)
+all_metadata$value <- gsub("Ductal carcinoma-mammary gland","Duct. carci-mam. gland",all_metadata$value)
+
+all_metadata$target <- paste(all_metadata$variable, all_metadata$value, sep = ": ")
+all_metadata <- all_metadata[,c(4,1)]
+names(all_metadata) <- c("source","target")
+  
+Z_matrix <- as.data.frame(model@expectations$Z$single_group)
+
+all_metadata_enrichment <- decoupleR::run_ulm(Z_matrix, all_metadata, minsize = 3)
+all_metadata_enrichment <- reshape2::dcast(all_metadata_enrichment, source~condition, value.var = "score")
+row.names(all_metadata_enrichment) <- all_metadata_enrichment$source
+all_metadata_enrichment <- all_metadata_enrichment[,-1]
+all_metadata_enrichment_top <- all_metadata_enrichment[
+  apply(all_metadata_enrichment, 1, function(x){max(abs(x)) > 2}),
+]
+
+t <- as.vector(t(all_metadata_enrichment_top))
+palette1 <- createLinearColors(t[t < 0],withZero = F , maximum = abs(min(t,na.rm = T)) * 10)
+palette2 <- createLinearColors(t[t > 0],withZero = F , maximum = abs(max(t,na.rm = T)) * 10)
+palette <- c(palette1, palette2)
+pheatmap(t(all_metadata_enrichment_top), show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315,display_numbers = F, filename = "results/mofa/mofa_metadata_enrichment.pdf", width = 4.5, height = 4)
+pheatmap(t(all_metadata_enrichment_top), show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315,display_numbers = T)
+```
+
 Further, we can inspect the composition of the factors by plotting the
 top 10 weights per factor and view.
 
@@ -425,7 +528,7 @@ grid.arrange(
                    view = "metab",
                    factor = 4,
                    nfeatures = 10) + 
-    ggtitle("Metabolomics")
+    ggtitle("Metabolomics"), ncol =3
 )
 ```
 
@@ -459,7 +562,7 @@ plot_data_heatmap(model,
                   annotation_colors = anno_colors)
 ```
 
-![](MOFA_to_COSMOS_files/figure-gfm/Heatmap%20RNA%20view%20factor%202-1.png)<!-- -->
+![](MOFA_to_COSMOS_files/figure-gfm/Heatmap%20RNA%20view%20factor%204-1.png)<!-- -->
 
 Further tools to investigate the latent factors are available inside the
 MOFA framework ([MOFA+: downstream analysis (in
@@ -513,6 +616,54 @@ activities of master regulons through moon, transcription factor
 activities estimated by decoupleR and dorothea are used as an input.
 
 ``` r
+RNA_all <- as.data.frame(weights$RNA) 
+row.names(RNA_all) <- gsub("_RNA","",row.names(RNA_all))
+
+RNA_top <- RNA_all[order(apply(RNA_all,1,function(x){max(abs(x))}), decreasing = T)[1:25],]
+
+t <- as.vector(t(RNA_top))
+palette1 <- createLinearColors(t[t < 0],withZero = F , maximum = abs(min(t,na.rm = T)) * 10)
+palette2 <- createLinearColors(t[t > 0],withZero = F , maximum = abs(max(t,na.rm = T)) * 10)
+palette <- c(palette1, palette2)
+pheatmap(RNA_top, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315, filename = "results/mofa/mofa_top_RNA.pdf", width = 4, height = 4.3)
+pheatmap(RNA_top, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315)
+```
+
+``` r
+# Calculate regulatory activities from Receptor and Ligand network
+ligrec_factors <- run_ulm(mat = as.matrix(RNA_all), network = ligrec_geneset, .source = set, .target = gene, minsize = 2) 
+ligrec_factors_df <- reshape2::dcast(ligrec_factors, formula = source~condition, value.var = "score")
+row.names(ligrec_factors_df) <- ligrec_factors_df$source
+ligrec_factors_df <- ligrec_factors_df[,-1]
+ligrec_factors_df <- ligrec_factors_df[order(apply(ligrec_factors_df,1,function(x){max(abs(x))}), decreasing = T)[1:25],]
+
+
+
+t <- as.vector(t(ligrec_factors_df))
+palette1 <- createLinearColors(t[t < 0],withZero = F , maximum = abs(min(t,na.rm = T)) * 10)
+palette2 <- createLinearColors(t[t > 0],withZero = F , maximum = abs(max(t,na.rm = T)) * 10)
+palette <- c(palette1, palette2)
+pheatmap(ligrec_factors_df, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315, filename = "results/mofa/mofa_top_ligrec.pdf", width = 4, height = 4.3)
+pheatmap(ligrec_factors_df, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315)
+```
+
+``` r
+# Calculate regulatory activities from TF network
+TF_factors <- run_ulm(mat = as.matrix(RNA_all), network = dorothea_df, minsize = 10)
+TF_factors <- reshape2::dcast(TF_factors, formula = source~condition, value.var = "score")
+row.names(TF_factors) <- TF_factors$source
+TF_factors <- TF_factors[,-1]
+TF_factors <- TF_factors[order(apply(TF_factors,1,function(x){max(abs(x))}), decreasing = T)[1:25],]
+
+t <- as.vector(t(TF_factors))
+palette1 <- createLinearColors(t[t < 0],withZero = F , maximum = abs(min(t,na.rm = T)) * 10)
+palette2 <- createLinearColors(t[t > 0],withZero = F , maximum = abs(max(t,na.rm = T)) * 10)
+palette <- c(palette1, palette2)
+pheatmap(TF_factors, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315, filename = "results/mofa/mofa_top_TF.pdf", width = 4, height = 4.3)
+pheatmap(TF_factors, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315)
+```
+
+``` r
 # Calculate regulatory activities from Receptor and Ligand network
 ligrec_high_vs_low <- run_ulm(mat = as.matrix(RNA), network = ligrec_geneset, .source = set, .target = gene, minsize = 2) 
 ligrec_high_vs_low <- ligrec_high_vs_low[ligrec_high_vs_low$statistic == "ulm",]
@@ -524,7 +675,7 @@ ligrec_high_vs_low_top$source <- factor(ligrec_high_vs_low_top$source, levels = 
 ggplot(ligrec_high_vs_low_top, aes(x=source, y = score)) + geom_bar(stat= "identity",position = "dodge") + theme_minimal() + theme(axis.text.x = element_text(angle = 315, vjust = 0.5, hjust=0))
 ```
 
-![](MOFA_to_COSMOS_files/figure-gfm/Activity%20estimations-1.png)<!-- -->
+![](MOFA_to_COSMOS_files/figure-gfm/Activity%20estimations%20for%20factor%204-1.png)<!-- -->
 
 ``` r
 # Calculate regulatory activities from TF network
@@ -542,7 +693,7 @@ TF_high_vs_low_top_10$source <- factor(TF_high_vs_low_top_10$source, levels = TF
 ggplot(TF_high_vs_low_top_10, aes(x=source, y = score)) + geom_bar(stat= "identity",position = "dodge") + theme_minimal()
 ```
 
-![](MOFA_to_COSMOS_files/figure-gfm/Activity%20estimations-2.png)<!-- -->
+![](MOFA_to_COSMOS_files/figure-gfm/Activity%20estimations%20for%20factor%204-2.png)<!-- -->
 
 ``` r
 # Combine results
@@ -582,6 +733,51 @@ names(prot_input) <- gsub("_proteo","",names(prot_input))
 
 expressed_genes <- as.data.frame(read_csv("data/RNA/RNA_log2_FPKM_clean.csv"))$Genes #since only complete cases were considered in the first part, here the full gene list is loaded
 ```
+
+We can be interested in looking how RNA and corresponding proteins
+correlate in each factor. We can plot this using scatter plots for each
+factors.
+
+``` r
+weights_RNA <- as.data.frame(weights$RNA)
+weights_prot <- as.data.frame(weights$proteo)
+
+weights_prot$ID <- gsub("_proteo$","",row.names(weights_prot))
+weights_RNA$ID <- gsub("_RNA$","",row.names(weights_RNA))
+
+plot_list <- list()
+r2_list <- list()
+for(i in 1:(dim(weights_prot)[2]-1))
+{
+  merged_weights <- merge(weights_RNA[,c(i,10)],weights_prot[,c(i,10)], by = "ID")
+  names(merged_weights) <- c("ID","RNA","prot")
+  r2_list[[i]] <- cor(merged_weights[,2],merged_weights[,3])^2
+  plot_list[[i]] <- ggplot(merged_weights,aes(x = RNA,y = prot)) + geom_point() +
+  geom_smooth(method='lm', formula= y~x) + 
+  theme_minimal() + 
+  theme(axis.title.x=element_blank(),
+      axis.text.x=element_blank(),
+      axis.ticks.x=element_blank(),
+      axis.title.y=element_blank(),
+      axis.text.y=element_blank(),
+      axis.ticks.y=element_blank())
+}
+
+r2_vec <- unlist(r2_list)
+r2_vec
+```
+
+    ## [1] 0.041804090 0.411093174 0.038741311 0.421953345 0.002666596 0.291243355
+    ## [7] 0.027585257 0.058177119 0.019215245
+
+``` r
+ggsave(filename = "results/mofa/RNA_prot_cor.pdf",plot = do.call("grid.arrange", c(plot_list, ncol = 3)), device = "pdf")
+```
+
+    ## Saving 7 x 7 in image
+
+![](MOFA_to_COSMOS_files/figure-gfm/correlation%20RNA/prot-1.png)<!-- -->
+coherently, only the factors where
 
 Next, we perform filtering steps in order to identify top deregulated
 features. Here, the individual filtering is based on absolute factor
@@ -779,8 +975,8 @@ my_options <- default_CARNIVAL_options(solver = "cplex")
 my_options$solverPath <- "cplex_macos/cplex"
 my_options$solver <- "cplex"
 my_options$mipGAP <- 0.05
-my_options$threads <- 2
-my_options$timelimit <- 360
+my_options$threads <- 6
+my_options$timelimit <- 3200/6
 my_options$limitPop <- 100
 
 data("HMDB_mapper_vec")
@@ -799,7 +995,7 @@ pre_run_rec_to_TF <- preprocess_COSMOS_signaling_to_metabolism(meta_network = me
                                                                signaling_data = upstream_inputs_filtered,
                                                                metabolic_data = downstream_inputs_filtered,
                                                                diff_expression_data = RNA_input,
-                                                               maximum_network_depth = 4,
+                                                               maximum_network_depth = 5,
                                                                remove_unexpressed_nodes = T,
                                                                filter_tf_gene_interaction_by_optimization = F,
                                                                CARNIVAL_options = my_options)
@@ -814,8 +1010,8 @@ CPUs.
 ## Set CARNIVAL options to solve optimization problem
 my_options$mipGAP <- 0.05
 my_options$threads <- 6
-my_options$timelimit <- 720
-my_options$limitPop <- 100
+# my_options$timelimit <- 720
+# my_options$limitPop <- 100
 ```
 
 After pre-optimization, we can perform the actual COSMOS run using the
@@ -875,18 +1071,16 @@ included in the PKN are removed and the filtering steps are completed.
 
 ``` r
 upstream_inputs <- c(signaling_input)
-downstream_inputs <- c(lig_inputs, metab_inputs*10) #factor 10 to scale up the metabs to the ulm scores
+downstream_inputs <- c(lig_inputs) 
 
-upstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(upstream_inputs, meta_network)
+dorothea_PKN <- dorothea_df[,c(1,3,2)]
+names(dorothea_PKN)[2] <- "interaction"
+
+upstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(upstream_inputs, dorothea_PKN)
+downstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(downstream_inputs, dorothea_PKN)
 ```
 
-    ## [1] "COSMOS: 9 input/measured nodes are not in PKN any more: HR, ZNF143, TFE3, FOXN1, BMAL1, TBX15 and 3 more."
-
-``` r
-downstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(downstream_inputs, meta_network)
-```
-
-    ## [1] "COSMOS: 29 input/measured nodes are not in PKN any more: FABP5, LGALS1, LGALS3BP, LTBP3, YBX1, Metab__HMDB0011747_m and 23 more."
+    ## [1] "COSMOS: 4 input/measured nodes are not in PKN any more: AGRN, EFNA3, EFNB1, LAMA5 and 0 more."
 
 ``` r
 TF_to_lig_cosmos_input <- list(upstream_inputs_filtered, downstream_inputs_filtered)
@@ -905,13 +1099,13 @@ After setting the variables for the CPLEX solver, we can perform the
 pre-optimization run …
 
 ``` r
-pre_run_TF_to_lig <- preprocess_COSMOS_signaling_to_metabolism(meta_network = meta_network, 
+pre_run_TF_to_lig <- preprocess_COSMOS_signaling_to_metabolism(meta_network = dorothea_PKN, 
                                                                signaling_data = upstream_inputs_filtered,
                                                                metabolic_data = downstream_inputs_filtered,
                                                                diff_expression_data = RNA_input,
-                                                               maximum_network_depth = 5,
+                                                               maximum_network_depth = 1,
                                                                remove_unexpressed_nodes = T,
-                                                               filter_tf_gene_interaction_by_optimization = F,
+                                                               filter_tf_gene_interaction_by_optimization = T,
                                                                CARNIVAL_options = my_options)
 ```
 
@@ -1189,11 +1383,522 @@ shown.
 
 ![alt text](results/cytoscape/sub_pathway_figure.pdf "Title")
 
+### MOON (meta footprint analysis) as a CANRIVAL alternative
+
+``` r
+##filter expressed genes from PKN
+data("meta_network")
+
+meta_network <- meta_network_cleanup(meta_network)
+
+expressed_genes <- as.data.frame(read_csv("data/RNA/RNA_log2_FPKM_clean.csv"))
+```
+
+    ## Rows: 11265 Columns: 61
+    ## ── Column specification ────────────────────────────────────────────────────────
+    ## Delimiter: ","
+    ## chr  (1): Genes
+    ## dbl (60): 786-0, A498, A549/ATCC, ACHN, BT-549, CAKI-1, CCRF-CEM, COLO 205, ...
+    ## 
+    ## ℹ Use `spec()` to retrieve the full column specification for this data.
+    ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+
+``` r
+expressed_genes <- setNames(rep(1,length(expressed_genes[,1])), expressed_genes$Genes)
+meta_network_filtered <- cosmosR:::filter_pkn_expressed_genes(names(expressed_genes), meta_pkn = meta_network)
+```
+
+    ## [1] "COSMOS: removing unexpressed nodes from PKN..."
+    ## [1] "COSMOS: 15353 interactions removed"
+
+``` r
+##format metab inputs
+metab_inputs <- as.numeric(scale(weights$metab[,4], center = F))
+names(metab_inputs) <- row.names(weights$metab)
+
+metab_to_HMDB <- as.data.frame(
+  read_csv("data/metabolomic/MetaboliteToHMDB.csv"))
+```
+
+    ## Rows: 139 Columns: 2
+    ## ── Column specification ────────────────────────────────────────────────────────
+    ## Delimiter: ","
+    ## chr (2): common, HMDB
+    ## 
+    ## ℹ Use `spec()` to retrieve the full column specification for this data.
+    ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+
+``` r
+metab_to_HMDB <- metab_to_HMDB[metab_to_HMDB$common %in% names(metab_inputs),]
+metab_inputs <- metab_inputs[metab_to_HMDB$common]
+names(metab_inputs) <- metab_to_HMDB$HMDB
+
+metab_inputs <- cosmosR::prepare_metab_inputs(metab_inputs, compartment_codes = c("m","c"))
+```
+
+    ## [1] "Adding compartment codes."
+
+``` r
+#prepare upstream inputs
+upstream_inputs <- c(rec_inputs) #the upstream input should be filtered for most significant
+
+TF_inputs <- scale(ligrec_TF_moon_inputs$TF, center = F)
+TF_inputs <- setNames(TF_inputs[,1], row.names(TF_inputs))
+
+downstream_inputs <- c(metab_inputs, TF_inputs) #the downstream input should be complete
+
+upstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(upstream_inputs, meta_network_filtered)
+```
+
+    ## [1] "COSMOS: 3 input/measured nodes are not in PKN any more: BCAM, CD63, LRP10 and 0 more."
+
+``` r
+downstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(downstream_inputs, meta_network_filtered)
+```
+
+    ## [1] "COSMOS: 186 input/measured nodes are not in PKN any more: Metab__HMDB0011747_m, Metab__HMDB0001294_m, Metab__HMDB0000355_m, Metab__HMDB0000479_m, Metab__HMDB0000272_m, Metab__HMDB0003464_m and 180 more."
+
+``` r
+#Filter inputs and prune the meta_network to only keep nodes that can be found downstream of the inputs
+#The number of step is quite flexible, 7 steps already covers most of the network
+
+n_steps <- 6
+
+# in this step we prune the network to keep only the relevant part between upstream and downstream nodes
+meta_network_filtered <- cosmosR:::keep_controllable_neighbours(meta_network_filtered
+                                                       , n_steps, 
+                                                       names(upstream_inputs_filtered))
+```
+
+    ## [1] "COSMOS: removing nodes that are not reachable from inputs within 6 steps"
+    ## [1] "COSMOS: 30411 from  47438 interactions are removed from the PKN"
+
+``` r
+downstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(downstream_inputs_filtered, meta_network_filtered)
+```
+
+    ## [1] "COSMOS: 83 input/measured nodes are not in PKN any more: Metab__HMDB0000755_m, Metab__HMDB0001191_m, Metab__HMDB0000161_m, Metab__HMDB0000517_m, Metab__HMDB0000168_m, Metab__HMDB0000191_m and 77 more."
+
+``` r
+meta_network_filtered <- cosmosR:::keep_observable_neighbours(meta_network_filtered, n_steps, names(downstream_inputs_filtered))
+```
+
+    ## [1] "COSMOS: removing nodes that are not observable by measurements within 6 steps"
+    ## [1] "COSMOS: 5947 from  17027 interactions are removed from the PKN"
+
+``` r
+upstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(upstream_inputs_filtered, meta_network_filtered)
+```
+
+    ## [1] "COSMOS: 4 input/measured nodes are not in PKN any more: EPHA6, GPC1, SDC1, SIRPA and 0 more."
+
+``` r
+write_csv(meta_network_filtered, file = "results/cosmos/moon/meta_network_filtered.csv")
+
+#compress the network to avoid redundant master controllers
+meta_network_compressed_list <- compress_same_children(meta_network_filtered, sig_input = upstream_inputs_filtered, metab_input = downstream_inputs_filtered)
+
+meta_network_compressed <- meta_network_compressed_list$compressed_network
+
+
+
+meta_network_compressed <- meta_network_cleanup(meta_network_compressed)
+
+load(file = "support/dorothea_df.RData")
+
+RNA_input <- as.numeric(weights$RNA[,4])
+names(RNA_input) <- gsub("_RNA$","",row.names(weights$RNA))
+```
+
+``` r
+data("HMDB_mapper_vec")
+
+meta_network_rec_to_TFmetab <- meta_network_compressed
+
+before <- 1
+after <- 0
+i <- 1
+while (before != after & i < 10) {
+  before <- length(meta_network_rec_to_TFmetab[,1])
+  recursive_decoupleRnival_res <- cosmosR::moon(upstream_input = upstream_inputs_filtered, 
+                                                 downstream_input = downstream_inputs_filtered, 
+                                                 meta_network = meta_network_rec_to_TFmetab, 
+                                                 n_layers = n_steps, 
+                                                 statistic = "ulm") 
+  
+  meta_network_rec_to_TFmetab <- filter_incohrent_TF_target(recursive_decoupleRnival_res, dorothea_df, meta_network_rec_to_TFmetab, RNA_input)
+  after <- length(meta_network_rec_to_TFmetab[,1])
+  i <- i + 1
+}
+```
+
+    ## [1] 2
+    ## [1] 3
+    ## [1] 4
+    ## [1] 5
+    ## [1] 6
+    ## [1] 2
+    ## [1] 3
+    ## [1] 4
+    ## [1] 5
+    ## [1] 6
+
+``` r
+if(i < 10)
+{
+  print(paste("Converged after ",paste(i-1," iterations", sep = ""),sep = ""))
+} else
+{
+  print(paste("Interupted after ",paste(i," iterations. Convergence uncertain.", sep = ""),sep = ""))
+}
+```
+
+    ## [1] "Converged after 2 iterations"
+
+``` r
+node_signatures <- meta_network_compressed_list$node_signatures
+duplicated_parents <- meta_network_compressed_list$duplicated_signatures
+duplicated_parents_df <- data.frame(duplicated_parents)
+duplicated_parents_df$source_original <- row.names(duplicated_parents_df)
+names(duplicated_parents_df)[1] <- "source"
+
+addons <- data.frame(names(node_signatures)[-which(names(node_signatures) %in% duplicated_parents_df$source_original)]) 
+names(addons)[1] <- "source"
+addons$source_original <- addons$source
+
+final_leaves <- meta_network_rec_to_TFmetab[!(meta_network_rec_to_TFmetab$target %in% meta_network_rec_to_TFmetab$source),"target"]
+final_leaves <- as.data.frame(cbind(final_leaves,final_leaves))
+names(final_leaves) <- names(addons)
+
+addons <- as.data.frame(rbind(addons,final_leaves))
+
+mapping_table <- as.data.frame(rbind(duplicated_parents_df,addons))
+
+recursive_decoupleRnival_res <- merge(recursive_decoupleRnival_res, mapping_table, by = "source")
+
+#save the whole res for later
+moon_res_rec_to_TFmet <- recursive_decoupleRnival_res[,c(4,2,3)]
+moon_res_rec_to_TFmet[,1] <- sapply(moon_res_rec_to_TFmet[,1], function(x, HMDB_mapper_vec) {
+    x <- gsub("Metab__", "", x)
+    x <- gsub("^Gene", "Enzyme", x)
+    suffixe <- stringr::str_extract(x, "_[a-z]$")
+    x <- gsub("_[a-z]$", "", x)
+    if (x %in% names(HMDB_mapper_vec)) {
+      x <- HMDB_mapper_vec[x]
+      x <- paste("Metab__", x, sep = "")
+    }
+    if (!is.na(suffixe)) {
+      x <- paste(x, suffixe, sep = "")
+    }
+    return(x)
+  }, HMDB_mapper_vec = HMDB_mapper_vec)
+
+levels <- recursive_decoupleRnival_res[,c(1,3)]
+
+
+
+levels <- recursive_decoupleRnival_res[,c(4,3)]
+
+recursive_decoupleRnival_res <- recursive_decoupleRnival_res[,c(4,2)]
+names(recursive_decoupleRnival_res)[1] <- "source"
+
+plot(density(recursive_decoupleRnival_res$score))
+abline(v = 1)
+abline(v = -1)
+```
+
+![](MOFA_to_COSMOS_files/figure-gfm/Run%20moon%20rec_to_TFmetab-1.png)<!-- -->
+
+``` r
+solution_network <- reduce_solution_network(decoupleRnival_res = recursive_decoupleRnival_res, 
+                                            meta_network = meta_network_filtered,
+                                            cutoff = 1.5, 
+                                            upstream_input = upstream_inputs_filtered, 
+                                            RNA_input = RNA_input, 
+                                            n_steps = n_steps)
+```
+
+    ## [1] "COSMOS: removing nodes that are not reachable from inputs within 6 steps"
+    ## [1] "COSMOS: 467 from  1090 interactions are removed from the PKN"
+
+``` r
+SIF_rec_to_TFmetab <- solution_network$SIF
+names(SIF_rec_to_TFmetab)[3] <- "sign"
+ATT_rec_to_TFmetab <- solution_network$ATT
+
+data("HMDB_mapper_vec")
+
+translated_res <- translate_res(SIF_rec_to_TFmetab,ATT_rec_to_TFmetab,HMDB_mapper_vec)
+
+levels_translated <- translate_res(SIF_rec_to_TFmetab,levels,HMDB_mapper_vec)[[2]]
+
+SIF_rec_to_TFmetab <- translated_res[[1]]
+ATT_rec_to_TFmetab <- translated_res[[2]]
+
+## Add weights to data
+ATT_rec_to_TFmetab <- merge(ATT_rec_to_TFmetab, MOFA_weights, all.x = T)
+ATT_rec_to_TFmetab <- merge(ATT_rec_to_TFmetab, feature_weights, all.x = T)
+names(ATT_rec_to_TFmetab)[2] <- "AvgAct"
+
+ATT_rec_to_TFmetab$NodeType <- ifelse(ATT_rec_to_TFmetab$Nodes %in% levels_translated[levels_translated$level == 0,1],1,0)
+
+ATT_rec_to_TFmetab$NodeType <- ifelse(ATT_rec_to_TFmetab$Nodes %in% ligrec_df$Node1, 2, ifelse(ATT_rec_to_TFmetab$Nodes %in% ligrec_df$Node2, 3, ifelse(ATT_rec_to_TFmetab$Nodes %in% dorothea_df$source, 4, ATT_rec_to_TFmetab$NodeType))) 
+
+names(SIF_rec_to_TFmetab)[4] <- "Weight"
+
+write_csv(SIF_rec_to_TFmetab,file = "results/cosmos/moon/SIF_rec_TFmetab.csv")
+write_csv(ATT_rec_to_TFmetab,file = "results/cosmos/moon/ATT_rec_TFmetab.csv")
+```
+
+``` r
+##filter expressed genes from PKN
+
+expressed_genes <- as.data.frame(read_csv("data/RNA/RNA_log2_FPKM_clean.csv"))
+```
+
+    ## Rows: 11265 Columns: 61
+    ## ── Column specification ────────────────────────────────────────────────────────
+    ## Delimiter: ","
+    ## chr  (1): Genes
+    ## dbl (60): 786-0, A498, A549/ATCC, ACHN, BT-549, CAKI-1, CCRF-CEM, COLO 205, ...
+    ## 
+    ## ℹ Use `spec()` to retrieve the full column specification for this data.
+    ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
+
+``` r
+expressed_genes <- setNames(rep(1,length(expressed_genes[,1])), expressed_genes$Genes)
+dorothea_PKN_filtered <- cosmosR:::filter_pkn_expressed_genes(names(expressed_genes), meta_pkn = dorothea_PKN)
+```
+
+    ## [1] "COSMOS: removing unexpressed nodes from PKN..."
+    ## [1] "COSMOS: 12053 interactions removed"
+
+``` r
+#prepare upstream inputs
+
+#the upstream input should be filtered for most significant
+upstream_inputs <- setNames(TF_weights$feature_weights, TF_weights$Nodes)
+upstream_inputs <- upstream_inputs[abs(upstream_inputs) > 2]
+
+lig_inputs <- ligrec_TF_moon_inputs$ligrec
+names(lig_inputs) <- gsub("___.+","",names(lig_inputs))
+lig_inputs <- tapply(lig_inputs, names(lig_inputs), mean)
+ligands <- names(lig_inputs)
+lig_inputs <- as.numeric(lig_inputs)
+names(lig_inputs) <- ligands
+
+lig_inputs <- scale(lig_inputs, center = F)
+lig_inputs <- setNames(lig_inputs[,1], row.names(lig_inputs))
+
+downstream_inputs <- lig_inputs #the downstream input should be complete
+
+upstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(upstream_inputs, dorothea_PKN_filtered)
+```
+
+    ## [1] "COSMOS: 22 input/measured nodes are not in PKN any more: SPI1, NR0B2, ESR1, AR, NKX2-5, RARB and 16 more."
+
+``` r
+downstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(downstream_inputs, dorothea_PKN_filtered)
+```
+
+    ## [1] "COSMOS: 19 input/measured nodes are not in PKN any more: ACTR2, ADAM9, AGRN, ARPC5, EFNA3, EFNB1 and 13 more."
+
+``` r
+#Filter inputs and prune the meta_network to only keep nodes that can be found downstream of the inputs
+#The number of step is quite flexible, 7 steps already covers most of the network
+
+n_steps <- 1
+
+# in this step we prune the network to keep only the relevant part between upstream and downstream nodes
+dorothea_PKN_filtered <- cosmosR:::keep_controllable_neighbours(dorothea_PKN_filtered
+                                                       , n_steps, 
+                                                       names(upstream_inputs_filtered))
+```
+
+    ## [1] "COSMOS: removing nodes that are not reachable from inputs within 1 steps"
+    ## [1] "COSMOS: 1896 from  17542 interactions are removed from the PKN"
+
+``` r
+downstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(downstream_inputs_filtered, dorothea_PKN_filtered)
+```
+
+    ## [1] "COSMOS: 9 input/measured nodes are not in PKN any more: BMP1, ETV5, GAS6, GDF11, ITGB3BP, MAML2 and 3 more."
+
+``` r
+dorothea_PKN_filtered <- cosmosR:::keep_observable_neighbours(dorothea_PKN_filtered, n_steps, names(downstream_inputs_filtered))
+```
+
+    ## [1] "COSMOS: removing nodes that are not observable by measurements within 1 steps"
+    ## [1] "COSMOS: 12699 from  15646 interactions are removed from the PKN"
+
+``` r
+upstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(upstream_inputs_filtered, dorothea_PKN_filtered)
+```
+
+    ## [1] "COSMOS: 7 input/measured nodes are not in PKN any more: MTF1, NR2C2, RBPJ, SRF, NCOA2, E2F2 and 1 more."
+
+``` r
+#compress the network to avoid redundant master controllers
+load(file = "support/dorothea_df.RData")
+
+RNA_input <- as.numeric(weights$RNA[,4])
+names(RNA_input) <- gsub("_RNA$","",row.names(weights$RNA))
+```
+
+``` r
+meta_network_TF_lig <- dorothea_PKN_filtered
+
+write_csv(meta_network_TF_lig, file = "results/cosmos/moon/meta_network_TF_lig.csv")
+
+before <- 1
+after <- 0
+i <- 1
+while (before != after & i < 10) {
+  before <- length(meta_network_TF_lig[,1])
+  recursive_decoupleRnival_res <- cosmosR::moon(upstream_input = upstream_inputs_filtered, 
+                                                 downstream_input = downstream_inputs_filtered, 
+                                                 meta_network = meta_network_TF_lig, 
+                                                 n_layers = n_steps, 
+                                                 statistic = "ulm") 
+  
+  meta_network_TF_lig <- filter_incohrent_TF_target(recursive_decoupleRnival_res, dorothea_df, meta_network_TF_lig, RNA_input)
+  after <- length(meta_network_TF_lig[,1])
+  i <- i + 1
+}
+
+if(i < 10)
+{
+  print(paste("Converged after ",paste(i-1," iterations", sep = ""),sep = ""))
+} else
+{
+  print(paste("Interupted after ",paste(i," iterations. Convergence uncertain.", sep = ""),sep = ""))
+}
+```
+
+    ## [1] "Converged after 1 iterations"
+
+``` r
+moon_res_TF_lig <-recursive_decoupleRnival_res
+moon_res_TF_lig[,1] <- sapply(moon_res_TF_lig[,1], function(x, HMDB_mapper_vec) {
+    x <- gsub("Metab__", "", x)
+    x <- gsub("^Gene", "Enzyme", x)
+    suffixe <- stringr::str_extract(x, "_[a-z]$")
+    x <- gsub("_[a-z]$", "", x)
+    if (x %in% names(HMDB_mapper_vec)) {
+      x <- HMDB_mapper_vec[x]
+      x <- paste("Metab__", x, sep = "")
+    }
+    if (!is.na(suffixe)) {
+      x <- paste(x, suffixe, sep = "")
+    }
+    return(x)
+  }, HMDB_mapper_vec = HMDB_mapper_vec)
+
+levels <- recursive_decoupleRnival_res[,c(1,3)]
+
+recursive_decoupleRnival_res <- recursive_decoupleRnival_res[,c(1,2)]
+names(recursive_decoupleRnival_res)[1] <- "source"
+
+plot(density(recursive_decoupleRnival_res$score))
+abline(v = 1)
+abline(v = -1)
+```
+
+![](MOFA_to_COSMOS_files/figure-gfm/run%20moon%20TF%20to%20lig-1.png)<!-- -->
+
+``` r
+solution_network <- reduce_solution_network(decoupleRnival_res = recursive_decoupleRnival_res, 
+                                            meta_network = as.data.frame(dorothea_PKN_filtered[,c(1,3,2)]),
+                                            cutoff = 1.5, 
+                                            upstream_input = upstream_inputs_filtered, 
+                                            RNA_input = RNA_input, 
+                                            n_steps = n_steps)
+```
+
+    ## [1] "COSMOS: removing nodes that are not reachable from inputs within 1 steps"
+    ## [1] "COSMOS: 29 from  143 interactions are removed from the PKN"
+
+``` r
+SIF_TF_lig <- solution_network$SIF
+names(SIF_TF_lig)[3] <- "sign"
+ATT_TF_lig <- solution_network$ATT
+
+
+translated_res <- translate_res(SIF_TF_lig,ATT_TF_lig,HMDB_mapper_vec)
+
+levels_translated <- translate_res(SIF_TF_lig,levels,HMDB_mapper_vec)[[2]]
+
+SIF_TF_lig <- translated_res[[1]]
+ATT_TF_lig <- translated_res[[2]]
+
+## Add weights to data
+ATT_TF_lig <- merge(ATT_TF_lig, MOFA_weights, all.x = T)
+ATT_TF_lig <- merge(ATT_TF_lig, feature_weights, all.x = T)
+names(ATT_TF_lig)[2] <- "AvgAct"
+
+ATT_TF_lig$NodeType <- ifelse(ATT_TF_lig$Nodes %in% levels_translated[levels_translated$level == 0,1],1,0)
+
+ATT_TF_lig$NodeType <- ifelse(ATT_TF_lig$Nodes %in% ligrec_df$Node1, 2, ifelse(ATT_TF_lig$Nodes %in% ligrec_df$Node2, 3, ifelse(ATT_TF_lig$Nodes %in% dorothea_df$source, 4, ATT_TF_lig$NodeType))) 
+
+names(SIF_TF_lig)[4] <- "Weight"
+
+write_csv(SIF_TF_lig,file = "results/cosmos/moon/SIF_rec_TFmetab.csv")
+write_csv(ATT_TF_lig,file = "results/cosmos/moon/ATT_rec_TFmetab.csv")
+```
+
+``` r
+combined_SIF_moon <- as.data.frame(rbind(SIF_rec_to_TFmetab, SIF_TF_lig))
+combined_SIF_moon <- unique(combined_SIF_moon)
+
+combined_ATT_moon <- as.data.frame(rbind(ATT_rec_to_TFmetab, ATT_TF_lig))
+combined_ATT_moon <- combined_ATT_moon %>% group_by(Nodes) %>% summarise_each(funs(mean(., na.rm = TRUE)))
+```
+
+    ## Warning: `funs()` was deprecated in dplyr 0.8.0.
+    ## ℹ Please use a list of either functions or lambdas:
+    ## 
+    ## # Simple named list: list(mean = mean, median = median)
+    ## 
+    ## # Auto named with `tibble::lst()`: tibble::lst(mean, median)
+    ## 
+    ## # Using lambdas list(~ mean(., trim = .2), ~ median(., na.rm = TRUE))
+    ## Call `lifecycle::last_lifecycle_warnings()` to see where this warning was
+    ## generated.
+
+``` r
+combined_ATT_moon <- as.data.frame(combined_ATT_moon)
+
+ligrec_ressource_addon <- ligrec_ressource[
+  ligrec_ressource$source_genesymbol %in% combined_SIF_moon$target &
+    ligrec_ressource$target_genesymbol %in% combined_SIF_moon$source
+, c(10,12)]
+ligrec_ressource_addon$sign <- 1
+ligrec_ressource_addon$Weight <- 1
+names(ligrec_ressource_addon)[c(1,2)] <- c("source","target")
+ligrec_ressource_addon <- unique(ligrec_ressource_addon)
+
+combined_SIF_moon <- as.data.frame(rbind(combined_SIF_moon, ligrec_ressource_addon))
+
+#It appears I may need to only consider direct TF regulations for TF to lig
+
+write_csv(combined_SIF_moon,file = "results/cosmos/moon/combined_SIF_moon.csv")
+write_csv(combined_ATT_moon,file = "results/cosmos/moon/combined_ATT_moon.csv")
+
+write_csv(moon_res_rec_to_TFmet, file = "results/cosmos/moon/moon_res_rec_to_TFmet.csv")
+write_csv(moon_res_TF_lig, file = "results/cosmos/moon/moon_res_TF_lig.csv")
+```
+
 ### Further analyses
 
 Further MOFA-COSMOS downstream analyses focusing on analyzing cell line
 specific MOFA transcriptomics are given in
 ./Further_MOFA_COSMOS_analyses.Rmd.
+
+``` r
+## Select nodes 
+interesting_nodes <- data.frame("name" = c("VEGFA","HIF1A","PRKCA","BNIP3","DAG1","ACO1","JAK1","ABL1","ITGB1","STAT1","PRKACA","MYC"))
+# nodes_cellline_weight_filtered <- nodes_cellline_weight[rownames(nodes_cellline_weight) %in% interesting_nodes$name,]
+```
 
 ### Session info
 
@@ -1217,99 +1922,101 @@ sessionInfo()
     ## [8] base     
     ## 
     ## other attached packages:
-    ##  [1] RCy3_2.16.0          tidyr_1.3.0          GSEABase_1.58.0     
-    ##  [4] graph_1.74.0         annotate_1.74.0      XML_3.99-0.13       
-    ##  [7] AnnotationDbi_1.58.0 IRanges_2.30.1       S4Vectors_0.34.0    
-    ## [10] Biobase_2.56.0       BiocGenerics_0.42.0  gridExtra_2.3       
-    ## [13] pheatmap_1.0.12      moon_0.1.0           decoupleR_2.5.2     
-    ## [16] liana_0.1.5          reshape2_1.4.4       dplyr_1.1.1         
-    ## [19] ggfortify_0.4.15     ggplot2_3.4.0        readr_2.1.4         
-    ## [22] MOFA2_1.6.0          cosmosR_1.5.2       
+    ##  [1] RColorBrewer_1.1-3   RCy3_2.16.0          tidyr_1.3.0         
+    ##  [4] GSEABase_1.58.0      graph_1.74.0         annotate_1.74.0     
+    ##  [7] XML_3.99-0.13        AnnotationDbi_1.58.0 IRanges_2.30.1      
+    ## [10] S4Vectors_0.34.0     Biobase_2.56.0       BiocGenerics_0.42.0 
+    ## [13] gridExtra_2.3        pheatmap_1.0.12      moon_0.1.0          
+    ## [16] decoupleR_2.5.2      liana_0.1.5          reshape2_1.4.4      
+    ## [19] dplyr_1.1.1          ggfortify_0.4.15     ggplot2_3.4.0       
+    ## [22] readr_2.1.4          MOFA2_1.6.0          cosmosR_1.5.2       
     ## 
     ## loaded via a namespace (and not attached):
-    ##   [1] utf8_1.2.3                  reticulate_1.28            
-    ##   [3] tidyselect_1.2.0            RSQLite_2.2.20             
-    ##   [5] htmlwidgets_1.6.1           grid_4.2.0                 
-    ##   [7] BiocParallel_1.30.4         lpSolve_5.6.17             
-    ##   [9] Rtsne_0.16                  devtools_2.4.5             
-    ##  [11] base64url_1.4               munsell_0.5.0              
-    ##  [13] ScaledMatrix_1.4.1          codetools_0.2-18           
-    ##  [15] statmod_1.5.0               scran_1.24.1               
-    ##  [17] pbdZMQ_0.3-9                future_1.30.0              
-    ##  [19] miniUI_0.1.1.1              withr_2.5.0                
-    ##  [21] colorspace_2.1-0            progressr_0.13.0           
-    ##  [23] filelock_1.0.2              highr_0.10                 
-    ##  [25] uuid_1.1-0                  logger_0.2.2               
-    ##  [27] knitr_1.42                  rstudioapi_0.14            
-    ##  [29] SingleCellExperiment_1.18.1 listenv_0.9.0              
-    ##  [31] labeling_0.4.2              MatrixGenerics_1.8.1       
-    ##  [33] repr_1.1.6                  GenomeInfoDbData_1.2.8     
-    ##  [35] farver_2.1.1                bit64_4.0.5                
-    ##  [37] rhdf5_2.40.0                basilisk_1.8.1             
-    ##  [39] parallelly_1.34.0           vctrs_0.6.1                
-    ##  [41] generics_0.1.3              xfun_0.38                  
-    ##  [43] R6_2.5.1                    doParallel_1.0.17          
-    ##  [45] GenomeInfoDb_1.32.4         clue_0.3-63                
-    ##  [47] rsvd_1.0.5                  RJSONIO_1.3-1.8            
-    ##  [49] locfit_1.5-9.7              bitops_1.0-7               
-    ##  [51] rhdf5filters_1.8.0          cachem_1.0.7               
-    ##  [53] DelayedArray_0.22.0         vroom_1.6.1                
-    ##  [55] promises_1.2.0.1            scales_1.2.1               
-    ##  [57] gtable_0.3.1                beachmat_2.12.0            
-    ##  [59] globals_0.16.2              processx_3.8.0             
-    ##  [61] rlang_1.1.0                 CARNIVAL_2.7.2             
-    ##  [63] GlobalOptions_0.1.2         checkmate_2.1.0            
-    ##  [65] BiocManager_1.30.19         yaml_2.3.7                 
-    ##  [67] backports_1.4.1             httpuv_1.6.8               
-    ##  [69] tools_4.2.0                 usethis_2.1.6              
-    ##  [71] ellipsis_0.3.2              RColorBrewer_1.1-3         
-    ##  [73] sessioninfo_1.2.2           Rcpp_1.0.10                
-    ##  [75] plyr_1.8.8                  visNetwork_2.1.2           
-    ##  [77] base64enc_0.1-3             sparseMatrixStats_1.8.0    
-    ##  [79] progress_1.2.2              zlibbioc_1.42.0            
-    ##  [81] purrr_1.0.1                 RCurl_1.98-1.10            
-    ##  [83] ps_1.7.2                    basilisk.utils_1.8.0       
-    ##  [85] prettyunits_1.1.1           GetoptLong_1.0.5           
-    ##  [87] cowplot_1.1.1               urlchecker_1.0.1           
-    ##  [89] SeuratObject_4.1.3          SummarizedExperiment_1.26.1
-    ##  [91] ggrepel_0.9.2               cluster_2.1.4              
-    ##  [93] fs_1.6.1                    magrittr_2.0.3             
-    ##  [95] circlize_0.4.15             matrixStats_0.63.0         
-    ##  [97] pkgload_1.3.2               hms_1.1.3                  
-    ##  [99] mime_0.12                   evaluate_0.20              
-    ## [101] xtable_1.8-4                readxl_1.4.2               
-    ## [103] shape_1.4.6                 compiler_4.2.0             
-    ## [105] tibble_3.2.1                crayon_1.5.2               
-    ## [107] htmltools_0.5.5             later_1.3.0                
-    ## [109] tzdb_0.3.0                  DBI_1.1.3                  
-    ## [111] corrplot_0.92               ComplexHeatmap_2.12.1      
-    ## [113] rappdirs_0.3.3              Matrix_1.5-3               
-    ## [115] cli_3.6.1                   uchardet_1.1.1             
-    ## [117] parallel_4.2.0              metapod_1.4.0              
-    ## [119] igraph_1.4.2                GenomicRanges_1.48.0       
-    ## [121] forcats_1.0.0               pkgconfig_2.0.3            
-    ## [123] dir.expiry_1.4.0            OmnipathR_3.9.6            
-    ## [125] sp_1.6-0                    IRdisplay_1.1              
-    ## [127] scuttle_1.6.3               xml2_1.3.3                 
-    ## [129] foreach_1.5.2               dqrng_0.3.0                
-    ## [131] XVector_0.36.0              rvest_1.0.3                
-    ## [133] stringr_1.5.0               callr_3.7.3                
-    ## [135] digest_0.6.31               Biostrings_2.64.1          
-    ## [137] rmarkdown_2.21              cellranger_1.1.0           
-    ## [139] uwot_0.1.14                 edgeR_3.38.4               
-    ## [141] DelayedMatrixStats_1.18.2   curl_5.0.0                 
-    ## [143] shiny_1.7.4                 rjson_0.2.21               
-    ## [145] lifecycle_1.0.3             jsonlite_1.8.4             
-    ## [147] Rhdf5lib_1.18.2             BiocNeighbors_1.14.0       
-    ## [149] limma_3.52.4                fansi_1.0.4                
-    ## [151] pillar_1.9.0                lattice_0.20-45            
-    ## [153] KEGGREST_1.36.3             fastmap_1.1.1              
-    ## [155] httr_1.4.5                  pkgbuild_1.4.0             
-    ## [157] glue_1.6.2                  remotes_2.4.2              
-    ## [159] png_0.1-8                   iterators_1.0.14           
-    ## [161] bit_4.0.5                   bluster_1.6.0              
-    ## [163] stringi_1.7.12              profvis_0.3.7              
-    ## [165] HDF5Array_1.24.2            blob_1.2.3                 
-    ## [167] BiocSingular_1.12.0         memoise_2.0.1              
-    ## [169] IRkernel_1.3.2              irlba_2.3.5.1              
-    ## [171] future.apply_1.10.0
+    ##   [1] rappdirs_0.3.3              pbdZMQ_0.3-9               
+    ##   [3] SeuratObject_4.1.3          ragg_1.2.5                 
+    ##   [5] bit64_4.0.5                 knitr_1.42                 
+    ##   [7] irlba_2.3.5.1               DelayedArray_0.22.0        
+    ##   [9] KEGGREST_1.36.3             RCurl_1.98-1.10            
+    ##  [11] doParallel_1.0.17           generics_0.1.3             
+    ##  [13] ScaledMatrix_1.4.1          callr_3.7.3                
+    ##  [15] cowplot_1.1.1               usethis_2.1.6              
+    ##  [17] RSQLite_2.2.20              future_1.30.0              
+    ##  [19] bit_4.0.5                   tzdb_0.3.0                 
+    ##  [21] base64url_1.4               xml2_1.3.3                 
+    ##  [23] httpuv_1.6.8                SummarizedExperiment_1.26.1
+    ##  [25] xfun_0.38                   hms_1.1.3                  
+    ##  [27] evaluate_0.20               promises_1.2.0.1           
+    ##  [29] fansi_1.0.4                 progress_1.2.2             
+    ##  [31] readxl_1.4.2                igraph_1.4.2               
+    ##  [33] DBI_1.1.3                   htmlwidgets_1.6.1          
+    ##  [35] purrr_1.0.1                 ellipsis_0.3.2             
+    ##  [37] corrplot_0.92               backports_1.4.1            
+    ##  [39] sparseMatrixStats_1.8.0     MatrixGenerics_1.8.1       
+    ##  [41] vctrs_0.6.1                 SingleCellExperiment_1.18.1
+    ##  [43] remotes_2.4.2               cachem_1.0.7               
+    ##  [45] withr_2.5.0                 progressr_0.13.0           
+    ##  [47] checkmate_2.1.0             vroom_1.6.1                
+    ##  [49] prettyunits_1.1.1           scran_1.24.1               
+    ##  [51] cluster_2.1.4               IRdisplay_1.1              
+    ##  [53] dir.expiry_1.4.0            crayon_1.5.2               
+    ##  [55] basilisk.utils_1.8.0        uchardet_1.1.1             
+    ##  [57] edgeR_3.38.4                pkgconfig_2.0.3            
+    ##  [59] labeling_0.4.2              GenomeInfoDb_1.32.4        
+    ##  [61] nlme_3.1-161                pkgload_1.3.2              
+    ##  [63] devtools_2.4.5              CARNIVAL_2.7.2             
+    ##  [65] rlang_1.1.0                 globals_0.16.2             
+    ##  [67] RJSONIO_1.3-1.8             lifecycle_1.0.3            
+    ##  [69] miniUI_0.1.1.1              filelock_1.0.2             
+    ##  [71] rsvd_1.0.5                  cellranger_1.1.0           
+    ##  [73] matrixStats_0.63.0          Matrix_1.5-3               
+    ##  [75] IRkernel_1.3.2              Rhdf5lib_1.18.2            
+    ##  [77] base64enc_0.1-3             GlobalOptions_0.1.2        
+    ##  [79] processx_3.8.0              png_0.1-8                  
+    ##  [81] rjson_0.2.21                bitops_1.0-7               
+    ##  [83] visNetwork_2.1.2            rhdf5filters_1.8.0         
+    ##  [85] Biostrings_2.64.1           blob_1.2.3                 
+    ##  [87] DelayedMatrixStats_1.18.2   shape_1.4.6                
+    ##  [89] stringr_1.5.0               parallelly_1.34.0          
+    ##  [91] beachmat_2.12.0             scales_1.2.1               
+    ##  [93] lpSolve_5.6.17              memoise_2.0.1              
+    ##  [95] magrittr_2.0.3              plyr_1.8.8                 
+    ##  [97] zlibbioc_1.42.0             compiler_4.2.0             
+    ##  [99] dqrng_0.3.0                 clue_0.3-63                
+    ## [101] cli_3.6.1                   XVector_0.36.0             
+    ## [103] urlchecker_1.0.1            listenv_0.9.0              
+    ## [105] ps_1.7.2                    mgcv_1.8-41                
+    ## [107] tidyselect_1.2.0            stringi_1.7.12             
+    ## [109] forcats_1.0.0               textshaping_0.3.6          
+    ## [111] highr_0.10                  yaml_2.3.7                 
+    ## [113] BiocSingular_1.12.0         locfit_1.5-9.7             
+    ## [115] ggrepel_0.9.2               grid_4.2.0                 
+    ## [117] tools_4.2.0                 future.apply_1.10.0        
+    ## [119] parallel_4.2.0              circlize_0.4.15            
+    ## [121] rstudioapi_0.14             uuid_1.1-0                 
+    ## [123] bluster_1.6.0               foreach_1.5.2              
+    ## [125] metapod_1.4.0               farver_2.1.1               
+    ## [127] Rtsne_0.16                  digest_0.6.31              
+    ## [129] BiocManager_1.30.19         shiny_1.7.4                
+    ## [131] Rcpp_1.0.10                 GenomicRanges_1.48.0       
+    ## [133] scuttle_1.6.3               later_1.3.0                
+    ## [135] httr_1.4.5                  ComplexHeatmap_2.12.1      
+    ## [137] colorspace_2.1-0            rvest_1.0.3                
+    ## [139] fs_1.6.1                    reticulate_1.28            
+    ## [141] splines_4.2.0               uwot_0.1.14                
+    ## [143] statmod_1.5.0               OmnipathR_3.9.6            
+    ## [145] sp_1.6-0                    basilisk_1.8.1             
+    ## [147] sessioninfo_1.2.2           systemfonts_1.0.4          
+    ## [149] xtable_1.8-4                jsonlite_1.8.4             
+    ## [151] R6_2.5.1                    profvis_0.3.7              
+    ## [153] pillar_1.9.0                htmltools_0.5.5            
+    ## [155] mime_0.12                   glue_1.6.2                 
+    ## [157] fastmap_1.1.1               BiocParallel_1.30.4        
+    ## [159] BiocNeighbors_1.14.0        codetools_0.2-18           
+    ## [161] pkgbuild_1.4.0              utf8_1.2.3                 
+    ## [163] lattice_0.20-45             tibble_3.2.1               
+    ## [165] logger_0.2.2                curl_5.0.0                 
+    ## [167] limma_3.52.4                rmarkdown_2.21             
+    ## [169] repr_1.1.6                  munsell_0.5.0              
+    ## [171] GetoptLong_1.0.5            rhdf5_2.40.0               
+    ## [173] GenomeInfoDbData_1.2.8      iterators_1.0.14           
+    ## [175] HDF5Array_1.24.2            gtable_0.3.1
