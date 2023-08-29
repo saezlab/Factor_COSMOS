@@ -1,0 +1,61 @@
+cell_line,tissue of origin a,age a,sex a,"prior treatment a,b",Epithelial,"histology a,c",source,ploidy d,p53 e,mdr f,doubling time g,Institute,Contributor,Reference
+MCF7,Breast,69,F,"NA",yes,Adenocarcinoma,Pleural effusion,"3n-, Hypotriploid (58-68)",WT,14,25.4,Michigan Cancer Foundtion,C.M. McGrath,"JNCI 51: 1409-1417,1973"
+MDA-MB-231/ATCC,Breast,51,F,"NA",yes,Adenocarcinoma,Pleural effusion,"2n+, Hyperdiploid (47-57)",MT,29,41.9,MD Anderson Hospital and Tumor Institute,R. Cailleau,"JNCI 53(3): 661-674,1974"
+HS 578T,Breast,74,F,"NA",yes,Carcinosarcoma-mammary gland; breast,Primary,"2n+, Hyperdiploid (47-57)",MT,"NA",53.8,Naval Bioscience Laboratory,A.J. Hackett,"JNCI 58: 1795-1806,1977"
+T-47D,Breast,54,F,"NA",yes,Ductal carcinoma-mammary gland,"NA","2n+, Hyperdiploid (47-57)",MT,19,45.5,?,I. Keydar,"Eur J Cancer 15:659-679,1979"
+BT-549,Breast,72,F,"NA",yes,Ductal carcinoma-mammary gland,Metastasis,"3n+/-, Near-triploid 69+/- (58-80)",?,-45,53.9,?,W. Coutinho; E.Y. Lasfargues,no pub
+SNB-75,Central nervous system,"NA",F,None,no,Astrocytoma,"NA","2n+, Hyperdiploid (47-57)",MT,-38,62.8,NINCDS,P.L. Kornblith,?
+SF-539,Central nervous system,34,F,Rad/BCNU/5FU/HU/6MP,no,Glial cell neoplasm,"NA","4n+/-, Near-tetraploid 92+/- (81-103)",WT,-40,35.4,University of California,M.L. Rosenblum,"J Neuropathol Exp Neurol 40: 201-229, 1981"
+SF-268,Central nervous system,24,F,Rad,no,Glioblastoma,"NA","2n+, Hyperdiploid (47-57)",MT,-38,33.1,?,P.L.Kornblith,"Acta Neuropathol 75: 92-103, 1987"
+SF-295,Central nervous system,67,F,Rad,no,Glioblastoma,"NA","5n+/-, Near-pentaploid 115+/- (104-126)",MT,91,29.5,University of California,M.L. Rosenblum,"Acta Neuropathol 75: 92-103, 1988"
+SNB-19,Central nervous system,47,M,None,no,Glioblastoma,"NA","3n+/-, Near-triploid 69+/- (58-80)",MT,-41,34.6,NINCDS,P.L. Kornblith,"Cancer 47: 255, 1981"
+U251,Central nervous system,75,M,"NA",no,Glioblastoma,"NA","2n+, Hyperdiploid (47-57)",MT,-19,23.8,"University of Uppsala, Sweden",?,"J Neuropathol Exp Neurol 40: 410-427, 1981"
+COLO 205,Colon,70,M,"NA",yes,Adenocarcinoma,Ascites,"3n, Triploid (69)",MT,7,23.8,Denver Medical Hospital,G.E. Moore,"Can Res. 38: 1345-1355, 1978"
+HCT-15,Colon,"NA","NA",None,yes,Adenocarcinoma,"NA","2n+/-, Near-diploid 46+/- (35-57)",?,414,20.6,ATCC,"ATCC (D.L. Dexter, Roger Williams General Hospital)","Can Res 39: 1020-1025, 1979"
+HT29,Colon,44,F,None,yes,Adenocarcinoma,Primary,"3n+/-, Near-triploid 69+/- (58-80)",MT,15,19.5,Memorial Sloan Kettering Cancer Center,J. Fogh,"Human Tumor Cells in vitro: 115-159, 1975"
+KM12,Colon,"NA","NA",None,yes,Adenocarcinoma,"NA","2n+/-, Near-diploid 46+/- (35-57)",MT,-19,23.7,MD Anderson Hospital and Tumor Institute,"I.J. Fidler, Univ of Texas M.D. Anderson Hospital and Tumor Institute","Can Res 48: 1943-1948, 1988"
+HCC-2998,Colon,"NA","NA","NA",yes,Carcinoma,"NA","2n+/-, Near-diploid 46+/- (35-57)",MT,-5,31.5,MD Anderson Hospital and Tumor Institute,?,?
+SW-620,Colon,51,M,"NA",yes,Carcinoma,"NA","2n+/-, Near-diploid 46+/- (35-57)",MT,31,20.4,Scott White Clinic,A. Leibovitz,Can Res 1976 Dec;36(12):4562-9
+HCT-116,Colon,"NA",M,"NA",yes,Carcinoma,"NA","2n-, Hypodiploid (35-45)",?,26,17.4,Baylor College,?,"Can Res 41: 1761-1756, 1981"
+CCRF-CEM,Leukemia,4,F,Rad/Mtx/Ctx,no,ALL,"NA","2n+/-, Near-diploid 46+/- (35-57)",MT,35,26.7,Children's Cancer research Foudation,G.E. Foley,"Cancer 18: 522-529, 1965"
+MOLT-4,Leukemia,19,M,VB/6MP/Pred,no,ALL,PB,"4n, Tetraploid (92)",WT,10,27.9,Roswell Park Memorial Institute,J. Minowada,"J. Natl. Cancer Inst. 49: 891-895, 1972"
+K-562,Leukemia,53,F,Bisulfan/PiBr,no,CML,Pleural effusion,"3n-, Hypotriploid (58-68)",MT,-1,19.6,University of Tennesse,H.T. Holden,"Blood 45: 321-334, 1975"
+SR,Leukemia,11,M,None,no,Lymphoma,"NA","2n+/-, Near-diploid 46+/- (35-57)",?,4,28.7,"Program Resources, Inc.","W.J. Urba, Program Resources, Inc.",?
+RPMI-8226,Leukemia,61,M,None,no,Myeloma,PB,"3n-, Hypotriploid (58-68)",WT,-3,33.5,?,G.E. Moore,"Proc Soc Exp Biol Med 125: 1246-1250, 1967"
+HL-60(TB),Leukemia,36,F,None,no,APL,PBL,"2n+/-, Near-diploid 46+/- (35-57)",MT,-11,28.6,NCI,R.C. Gallo,"Blood 54(3):713-33, 1979"
+MDA-MB-435,Melanoma,31,F,"NA",no,Ductal carcinoma-mammary gland,Pleural effusion,"2n+, Hyperdiploid (47-57)",MT,20,25.8,?,R. Cailleau,"Cancer Res 40:3118-3129,1980"
+MDA-N,Melanoma,31,F,"NA",no,Ductal carcinoma-mammary gland,Pleural effusion,"NA",MT,12,22.5,?,?,?
+LOX IMVI,Melanoma,58,M,None,no,Malignant amelanotic melanoma,"NA","3n+/-, Near-triploid 69+/- (58-80)",WT,12,20.5,"Norsk Hydro's Institut, Norway",?,"Int J Cancer 41: 442-449, 1988"
+MALME-3M,Melanoma,43,M,None,no,Malignant melanotic melanoma,Metastasis,"4n+/-, Near-tetraploid 92+/- (81-103)",WT,22,46.2,Memorial Sloan Kettering Cancer Center,J. Fogh,"J. Natl. Cancer Inst. 59: 221-226, 1977"
+SK-MEL-2,Melanoma,60,M,None,no,Malignant melanotic melanoma,Metastasis,"4n-, Hypotetraploid (81-91)",WT,14,45.5,Memorial Sloan Kettering Cancer Center,G. Trempe; L.J. Old,"Human Tumor Cells in vitro, pp 115-159, 1975"
+SK-MEL-28,Melanoma,51,M,None,no,Malignant melanotic melanoma,"NA","4n-, Hypotetraploid (81-91)",MT,11,35.1,Memorial Sloan Kettering Cancer Center,T. Takahashi,"PNAS 73: 3278-3282, 1976"
+SK-MEL-5,Melanoma,24,F,None,no,Malignant melanotic melanoma,Metastasis,"4n+, Hypertetraploid (93-103)",WT,12,25.2,Memorial Sloan Kettering Cancer Center,T. Takahashi,"PNAS, 73: 3278-3282, 1976"
+M14,Melanoma,"NA","NA","NA",no,Malignant melanotic melanoma,"NA","3n+/-, Near-triploid 69+/- (58-80)",MT,14,26.3,"John Wayne Cancer Clinic, UCLA School of Medicine","D.H. Kern, John Wayne Cancer Clinic, UCLA School of Medicine","Cancer Res 48: 578-582, 1988"
+UACC-257,Melanoma,"NA","NA","NA",no,Malignant melanotic melanoma,"NA","3n+, Hypertriploid (70-80)",WT,26,38.5,University of Arizona,"A. Leibovitz, UACC",?
+UACC-62,Melanoma,"NA","NA","NA",no,Malignant melanotic melanoma,"NA","3n+/-, Near-triploid 69+/- (58-80)",WT,8,31.3,University of Arizona,"A. Leibovitz, UACC",?
+EKVX,Non-Small Cell Lung,"NA",M,"NA",yes,Adenocarcinoma,"NA","3n+/-, Near-triploid 69+/- (58-80)",MT,-9,43.6,"Norsk Hydro's Institut, Norway",?,?
+A549/ATCC,Non-Small Cell Lung,58,M,"NA",yes,Adenocarcinoma,"NA","3n+/-, Near-triploid 69+/- (58-80)",WT,10,22.9,NCI,Giard DJ,"J Natl Cancer Inst. 51(5):1417-23, 1973"
+HOP-62,Non-Small Cell Lung,60,F,None,yes,Adenocarcinoma,"NA","4n+, Hypertetraploid (93-103)",MT,61,39,Johns Hopkins University,M.Liu,?
+NCI-H23,Non-Small Cell Lung,"NA",M,None,yes,Adenocarcinoma,"NA","2n+, Hyperdiploid (47-57)",MT,-2,33.4,NCI,J.D. Minna; A.F. Gazdar,"Cancer Res. 40: 3502-3507, 1980"
+NCI-H522,Non-Small Cell Lung,"NA",M,None,yes,Adenocarcinoma,"NA","2n+/-, Near-diploid 46+/- (35-57)",MT,16,38.2,NCI,?,"Can Res 45: 2913-2923, 1985"
+NCI-H460,Non-Small Cell Lung,"NA",M,"NA",yes,Large Cell Carcinoma,Pleural effusion,"2n+/-, Near-diploid 46+/- (35-57)",WT,25,17.8,NCI,J.D. Minna; A.F. Gazdar,"Science 246: 491-494, 1989"
+HOP-92,Non-Small Cell Lung,62,M,None,yes,Large Cell Carcinoma,"NA","4n+/-, Near-tetraploid 92+/- (81-103)",MT,-4,79.5,Johns Hopkins University,M.Liu,?
+NCI-H322M,Non-Small Cell Lung,52,M,None,yes,Small cell Bronchioalveolar Carcinoma,"NA","2n+/-, Near-diploid 46+/- (35-57)",MT,-10,35.3,NCI,?,?
+NCI-H226,Non-Small Cell Lung,"NA",M,None (non smoker),yes,Squamous cell carcinoma-vpd,"NA","3n, Triploid (69)",MT,7,61,NCI,J.D. Minna; A.F. Gazdar,"Cancer Res. 40: 3502-3507, 1980"
+OVCAR-3,Ovarian,60,F,CyPh/CsPt/Adr,yes,Adenocarcinoma,Ascites,"3n+/-, Near-triploid 69+/- (58-80)",MT,-12,34.7,NCI,T.C. Hamilton,"Sem Ocol 11: 285-298, 1984"
+OVCAR-4,Ovarian,42,F,CyPh/CsPt/Adr,yes,Adenocarcinoma,"NA","3n+/-, Near-triploid 69+/- (58-80)",WT,-4,41.4,NCI,T.C. Hamilton,"Sem Ocol 11: 285-298, 1984"
+SK-OV-3,Ovarian,64,F,Thiotepa,yes,Adenocarcinoma,Ascites,"4n+/-, Near-tetraploid 92+/- (81-103)",?,15,48.7,Memorial Sloan Kettering Cancer Center,?,"Human Tumor Cells in vitro, pp. 115-159, 1975"
+OVCAR-5,Ovarian,67,F,None,yes,Adenocarcinoma,"NA","2n+, Hyperdiploid (47-57)",MT,13,48.8,NCI,R. Ozols,"Sem Ocol 11: 285-298, 1985"
+NCI/ADR-RES,Ovarian,"NA",F,"NA",yes,Adenocarcinoma,"NA","2n+/-, Near-diploid 46+/- (35-57)",MT,352,34,NCI,"K.Cowan, NCI","Cancer Res., 46:4087-4090,1986"
+OVCAR-8,Ovarian,64,F,Ctx/Adr/CsPt/CyPh,yes,Carcinoma,"NA","2n+, Hyperdiploid (47-57)",MT,7,26.1,NCI,T.C. Hamilton,?
+IGROV1,Ovarian,47,F,Rad,yes,Cystoadenocarcinoma-pd,"NA","4n+/-, Near-tetraploid 92+/- (81-103)",MT,20,31,"Institute Gustave Roussy, France",?,"Can Res 45: 4970-4979,1985"
+PC-3,Prostate,62,M,"NA",yes,Adenocarcinoma,"NA","4n, Tetraploid (92)",MT,11,27.1,Pasadena Center for Medical Research,M.E. Kaighn,Invest Urol 1979 Jul;17(1):16-23
+DU-145,Prostate,69,M,Androgen independent and unresposive to hormone therapy,yes,Prostate carcinoma,Metastasis,"3n+/-, Near-triploid 69+/- (58-80)",?,4,32.3,"Washington University School of Medicine, Saint Louis, MO",K.R. Stone,"Int J Cancer 21: 274-281,1978"
+786-0,Renal,58,M,None,yes,Adenocarcinoma,"NA","4n+/-, Near-tetraploid 92+/- (81-103)",MT,-44,22.4,?,"R.D.Williams, Univ. of Iowa","In Vitro 14: 779-786, 1978"
+A498,Renal,52,F,"NA",yes,Adenocarcinoma,"NA","3n, Triploid (69)",WT,78,66.8,NCI,?,"JNCI 51: 1417-1423,1973"
+CAKI-1,Renal,49,M,Rad/HU/5FU/Mtx/Ctx,yes,Clear cell carcinoma,Metastasis,"3n, Triploid (69)",WT,171,39,Memorial Sloan Kettering Cancer Center,J. Fogh,"Human Tumor cells in vitro, pp 115-159, 1975"
+RXF-393,Renal,54,M,None,yes,hypernephroma-pd,"NA","3n+/-, Near-triploid 69+/- (58-80)",MT,42,62.9,MD Anderson Hospital and Tumor Institute,NCI/DCT/DTP,"Contrib oncol 42, 1992"
+ACHN,Renal,22,M,Rad/VB/CCNU/Mto/Pred,yes,Renal cell carcinoma,"NA","2n+/-, Near-diploid 46+/- (35-57)",WT,120,27.5,"Southern Research Inst. (T.F. Hogan, Middleton memorial VA hospital)",S.M.Schmid,"Cancer Res 42: 4948-4953, 1982"
+SN12C,Renal,43,M,None,yes,Renal cell carcinoma,"NA","3n, Triploid (69)",MT,-86,29.5,MD Anderson Hospital and Tumor Institute,.J.Fidler,"Cancer Res 46: 4109-4115, 1986"
+UO-31,Renal,"NA",F,None,yes,Renal cell carcinoma,"NA","2n+/-, Near-diploid 46+/- (35-57)",WT,59,41.7,NCI,W.M.Linehan,?
+TK-10,Renal,43,M,None,yes,Renal Spindle cell carcinoma,"NA","4n, Tetraploid (92)",MT,-4,51.3,?,"R.V.Clayman, Washington Univ.School of Medicine","Cancer Res 46: 3856-3862, 1987"

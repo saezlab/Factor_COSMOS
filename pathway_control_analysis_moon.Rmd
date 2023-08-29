@@ -1,0 +1,141 @@
+---
+title: "pathway control analysis moon"
+author: "Aurelien Dugourd"
+date: "`r Sys.Date()`"
+output:
+  md_document:
+    variant: gfm
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(readr)
+library(pheatmap)
+library(cosmosR)
+library(decoupleR)
+library(GSEABase)
+```
+
+```{r}
+full_moon_res_combined <- as.data.frame(
+  read_csv("results/cosmos/moon/full_moon_res_combined.csv"))
+
+combined_meta_network_translated <- as.data.frame(
+  read_csv("results/cosmos/moon/combined_meta_network_translated.csv"))
+
+background_nodes <- full_moon_res_combined[abs(full_moon_res_combined$score) > 1,"source"]
+```
+
+```{r import_gmt function, include=FALSE}
+import_gmt <- function(gmtfile, fast = T){
+  if(fast)
+  {
+    genesets = GSEABase::getGmt(con = gmtfile)
+    genesets = unlist(genesets)
+    
+    gene_to_term =plyr::ldply(genesets,function(geneset){
+      temp <- geneIds(geneset)
+      temp2 <- setName(geneset)
+      temp3 <- as.data.frame(cbind(temp,rep(temp2,length(temp))))
+      
+    },.progress = plyr::progress_text())
+    names(gene_to_term) <- c("gene","term")
+    return(gene_to_term[complete.cases(gene_to_term),])
+  }
+  else
+  {
+    genesets = getGmt(con = gmtfile)
+    genesets = unlist(genesets)
+    
+    gene_to_term <- data.frame(NA,NA)
+    names(gene_to_term) <- c("gene","term")
+    for (geneset in genesets)
+    {
+      temp <- geneIds(geneset)
+      temp2 <- setName(geneset)
+      temp3 <- as.data.frame(cbind(temp,rep(temp2,length(temp))))
+      names(temp3) <- c("gene","term")
+      gene_to_term <- rbind(gene_to_term,temp3)
+    }
+    
+    return(gene_to_term[complete.cases(gene_to_term),])
+  }
+}
+
+## Feature set
+pathways_df <- data.frame(import_gmt("support/c2.cp.v2022.1.Hs.symbols.gmt"))
+
+pathways_NABA_KEGG <- data.frame(pathways_df[grepl("NABA_",pathways_df$term) |  grepl("KEGG_",pathways_df$term),])
+names(pathways_NABA_KEGG) <- c("target","source")
+```
+
+```{r,  include=FALSE}
+top_nodes <- full_moon_res_combined[abs(full_moon_res_combined$score) > 2,"source"]
+
+pathway_control_set <- list()
+i <- 1
+for(node_of_interest in top_nodes)
+{
+  downstream_nodes <- unique(unlist(cosmosR:::keep_controllable_neighbours(combined_meta_network_translated, n_steps = 2, input_nodes = node_of_interest)[,c(1,2)]))
+  
+  if(length(downstream_nodes) > 0)
+  {
+    downstream_nodes <- downstream_nodes[-which(downstream_nodes == node_of_interest)]
+    downstream_nodes <- downstream_nodes[which(downstream_nodes %in% background_nodes)]
+    if(length(downstream_nodes) > 0)
+    {
+      res_ORA <- as.data.frame(piano::runGSAhyper(genes = downstream_nodes, universe = background_nodes, gsc = piano::loadGSC(pathways_NABA_KEGG))$resTab)
+      res_ORA$log2fold_ratio <- log2((res_ORA[,3]/(res_ORA[,3]+res_ORA[,4])) / (res_ORA[,5]/(res_ORA[,5]+res_ORA[,6])))
+      res_ORA$node_of_interest <- node_of_interest
+      res_ORA$pathway <- row.names(res_ORA)
+  
+      pathway_control_set[[i]] <- res_ORA 
+      i <- i + 1
+    }
+  } 
+}
+pathway_control_set <- do.call(rbind,pathway_control_set)
+```
+
+```{r}
+pathway_control_df <- reshape2::dcast(pathway_control_set, pathway~node_of_interest, value.var = "p-value")
+row.names(pathway_control_df) <- pathway_control_df$pathway
+
+pathway_control_df <- pathway_control_df[,-1]
+pathway_control_df <- pathway_control_df[,apply(pathway_control_df, 2, function(x){min(x) < 0.1})]
+
+
+```
+
+```{r, fig.height=3.3, fig.width=8}
+threshold_pval <- 0.0000000000000001
+
+pathway_control_df_top <- pathway_control_df[!grepl("CANCER",row.names(pathway_control_df)),]
+pathway_control_df_top <- pathway_control_df_top[apply(pathway_control_df_top, 1, function(x){min(x) < threshold_pval}),apply(pathway_control_df_top, 2, function(x){min(x) < threshold_pval})]
+pathway_control_df_top <- -log10(pathway_control_df_top)
+# pathway_control_df_top[pathway_control_df_top < 3] <- NA
+pathway_control_df_top[pathway_control_df_top >= 15] <- 15
+pathway_control_df_top[pathway_control_df_top >= 8 & pathway_control_df_top < 15] <- 8
+pathway_control_df_top[pathway_control_df_top >= 3 & pathway_control_df_top < 8] <- 3
+pathway_control_df_top[pathway_control_df_top <3] <- 0
+
+row.names(pathway_control_df_top) <- tolower(gsub("_"," ",gsub("KEGG","",row.names(pathway_control_df_top))))
+names(pathway_control_df_top) <- gsub("Metab__","",gsub("_[a-z$]","",names(pathway_control_df_top)))
+pheatmap::pheatmap(pathway_control_df_top, angle_col = 315, na_col = "grey", cluster_rows = T, cluster_cols = T, display_numbers = F, number_color = "black", color = colorRampPalette(c("white","red"))(100), treeheight_row = 0, treeheight_col = 0)
+pheatmap::pheatmap(pathway_control_df_top, angle_col = 315, na_col = "grey", cluster_rows = T, cluster_cols = T, display_numbers = F, number_color = "black", color = colorRampPalette(c("white","red"))(100), treeheight_row = 0, treeheight_col = 0, filename = "results/cosmos/moon/pathway_control_top.pdf", height = 3, width = 9)
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```

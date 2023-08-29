@@ -11,7 +11,7 @@ data("meta_network")
 
 meta_network <- meta_network_cleanup(meta_network)
 
-load("data/cosmos/cosmos_inputs.RData")
+load("data/cosmos/native/cosmos_inputs.RData")
 
 names(cosmos_inputs)
 

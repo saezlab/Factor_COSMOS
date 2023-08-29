@@ -1,0 +1,2 @@
+input_file,output_file,scale_groups,scale_views,factors,spikeslab_weights,spikeslab_factors,ard_factors,ard_weights,iter,convergence_mode,startELBO,freqELBO,dropR2,gpu_mode,verbose,seed,length,likelihood_1,likelihood_2,likelihood_3
+/Users/aureliendugourd/Dropbox/NCI60_cosmos/data/mofa/mofa_data.csv,/Users/aureliendugourd/Dropbox/NCI60_cosmos/results/mofa/mofa_res_58factor.hdf5,False,False,58,True,False,True,True,1000,slow,1,1,0.001,True,False,1,3,gaussian,gaussian,gaussian
