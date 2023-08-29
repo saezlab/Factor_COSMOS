@@ -72,7 +72,7 @@ pathways_NABA_KEGG <- data.frame(pathways_df[grepl("NABA_",pathways_df$term) |  
 names(pathways_NABA_KEGG) <- c("target","source")
 ```
 
-```{r}
+```{r,  include=FALSE}
 top_nodes <- full_moon_res_combined[abs(full_moon_res_combined$score) > 2,"source"]
 
 pathway_control_set <- list()
