@@ -13,7 +13,10 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r}
 library(readr)
-
+library(pheatmap)
+library(cosmosR)
+library(decoupleR)
+library(GSEABase)
 ```
 
 ```{r}
@@ -107,7 +110,7 @@ pathway_control_df <- pathway_control_df[,apply(pathway_control_df, 2, function(
 
 ```
 
-```{r, fig.height=2, fig.width=6}
+```{r, fig.height=3.3, fig.width=8}
 threshold_pval <- 0.0000000000000001
 
 pathway_control_df_top <- pathway_control_df[!grepl("CANCER",row.names(pathway_control_df)),]
