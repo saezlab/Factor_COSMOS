@@ -2,10 +2,10 @@
 
 ### Installation and dependency
 
-COSMOS is dependent on CARNIVAL for exhibiting the signalling pathway
-optimization. CARNIVAL requires the interactive version of IBM Cplex or
-CBC-COIN solver as the network optimizer. The IBM ILOG Cplex is freely
-available through Academic Initiative
+The legacy network optimisation of COSMOS is done through CARNIVAL.
+CARNIVAL requires the interactive version of IBM Cplex or CBC-COIN
+solver as the network optimizer. The IBM ILOG Cplex is freely available
+through Academic Initiative
 [here](https://community.ibm.com/community/user/datascience/blogs/xavier-nodet1/2020/07/09/cplex-free-for-students).
 As an alternative, the CBC solver is open source and freely available
 for any user, but has a significantly lower performance than CPLEX. The
@@ -13,7 +13,8 @@ CBC executable can be find under cbc/. Alternatively for small networks,
 users can rely on the freely available lpSolve R-package, which is
 automatically installed with the package.
 
-In this tutorial we use *CPLEX* which is strongly recommended.
+In this tutorial we use *CPLEX* for means of comparison with the newer
+MOON function that doesn’t rely on optimisation.
 
 ``` r
 # Install cosmosR from bioconductor (stable version)
@@ -25,12 +26,13 @@ if (!requireNamespace("devtools", quietly = TRUE)) install.packages("devtools")
 if (!requireNamespace("cosmosR", quietly = TRUE)) devtools::install_github("saezlab/cosmosR")
 ```
 
-We are using MOFA2 (Argelaguet et al., 2018) to find correlation between
-different omics and use its output (factors) to restrict COSMOS input.
-However, since we are using the python version of MOFA2, please make
-sure to have [mofapy2](https://github.com/bioFAM/mofapy2) as well as
-panda and numpy installed in your (conda) environment (e.g. by using
-reticulate: reticulate::use_condaenv(“base”, required = T) %\>%
+We are using MOFA2 (Argelaguet et al., 2018) to find decompose variance
+across different omics and use COSMOS to find mechanistic
+interpretations of its factors. However, since we are using the python
+version of MOFA2, please make sure to have
+[mofapy2](https://github.com/bioFAM/mofapy2) as well as panda and numpy
+installed in your (conda) environment (e.g. by using reticulate:
+reticulate::use_condaenv(“base”, required = T) %\>%
 reticulate::conda_install(c(“mofapy2”,“panda”,“numpy”)). For downstream
 analysis, the R version of MOFA2 is used.
 
@@ -225,7 +227,33 @@ head(mofa_ready_data)
 We have successfully combined single omic data sets to a long
 multi-omics data frame.
 
-### MOFA run
+``` r
+condition_prot_RNA_correlation <- sapply(unique(mofa_ready_data$sample), function(condition){
+  merged_data <- merge(mofa_ready_data[which(mofa_ready_data$sample == condition & mofa_ready_data$view == "RNA"),-c(1,3)],
+                       mofa_ready_data[which(mofa_ready_data$sample == condition & mofa_ready_data$view == "proteo"),-c(1,3)],
+                       by = "feature")
+  return(cor(merged_data[,2],merged_data[,3], use = "pairwise.complete.obs"))
+})
+
+hist(condition_prot_RNA_correlation, breaks = 10)
+```
+
+![](MOFA_to_COSMOS_files/figure-gfm/Supp%20figure%20condition_prot_RNA_correlation-1.png)<!-- -->
+
+``` r
+overlap_genes <- unique(intersect(proteo$feature,RNA$feature))
+single_prot_RNA_correlation <- sapply(overlap_genes, function(gene){
+  merged_data <- merge(mofa_ready_data[which(mofa_ready_data$feature == gene & mofa_ready_data$view == "RNA"),-c(2,3)],
+                       mofa_ready_data[which(mofa_ready_data$feature == gene & mofa_ready_data$view == "proteo"),-c(2,3)],
+                       by = "sample")
+  return(cor(merged_data[,2],merged_data[,3], use = "pairwise.complete.obs"))
+})
+
+hist(single_prot_RNA_correlation, breaks = 100)
+```
+
+![](MOFA_to_COSMOS_files/figure-gfm/Supp%20figure%20single_prot_RNA_correlation-1.png)<!-- -->
+\### MOFA run
 
 After pre-processing the data into MOFA appropriate input, let’s perform
 the MOFA analysis. To change specific MOFA options the function
@@ -236,9 +264,10 @@ Since we don’t know how many factors are needed to explain our data
 well, various maximum numbers of factors are tested. The final results
 can be found in the results/mofa/ folder.
 
-Do not run this chunk, unless you want to repeat the mofa optimisation,
-because it takes a lot of time ot run. The results are already available
-in the results/mofa folder.
+Only run this chunk if you want to re-perform the mofa optimisation. The
+results are already available in the results/mofa folder. We are testing
+various amount of maximum number of factors that MOFA is allowed to
+explore.
 
 ``` r
 for(i in c(5:15,20,length(unique(mofa_ready_data$sample)))){
@@ -337,6 +366,123 @@ more than 50% of the variance. In contrast, for both metabolomics as
 well as proteomics around 20% of the variance can be explained by all
 factors.
 
+It isn’t unexpected that more variance of the RNA dataset can be
+reconstructed. Usually, more features available in a given view will
+lead to a higher % of variance explained. It is interesting to notice
+though that similar amount of variance are explained for metabolic and
+proteomic views, despite having very different number of features. thgis
+may be due to the fact that metabolite abundances are in general more
+cross-correlated than protein abundances (due to the underlying
+regulatory structures, e.i. reaction networks vs protein synthesis and
+degratation regulatory mechanisms).
+
+``` r
+RNA <- dcast(mofa_ready_data[which(mofa_ready_data$view == "RNA"),-3], feature~sample, value.var = "value")
+row.names(RNA) <- RNA[,1]
+RNA <- RNA[,-1]
+
+RNA_crosscor <- cor(t(RNA), use = "pairwise.complete.obs")
+# hist(RNA_crosscor[upper.tri(RNA_crosscor)], breaks = 1000)
+
+prot <- dcast(mofa_ready_data[which(mofa_ready_data$view == "proteo"),-3], feature~sample, value.var = "value")
+row.names(prot) <- prot[,1]
+prot <- prot[,-1]
+
+prot_crosscor <- cor(t(prot), use = "pairwise.complete.obs")
+# hist(prot_crosscor[upper.tri(prot_crosscor)], breaks = 1000)
+
+metabo <- dcast(mofa_ready_data[which(mofa_ready_data$view == "metab"),-3], feature~sample, value.var = "value")
+row.names(metabo) <- metabo[,1]
+metabo <- metabo[,-1]
+
+metabo_crosscor <- cor(t(metabo), use = "pairwise.complete.obs")
+# hist(metabo_crosscor[upper.tri(metabo_crosscor)], breaks = 1000)
+
+# plot(calculate_variance_explained(model)$r2_total$single_group, c(mean(RNA_crosscor),mean(metabo_crosscor),mean(prot_crosscor)))
+plot(calculate_variance_explained(model)$r2_total$single_group, c(dim(RNA_crosscor)[1],dim(metabo_crosscor)[1],dim(prot_crosscor)[1]))
+```
+
+![](MOFA_to_COSMOS_files/figure-gfm/Chekc%20cross%20correlation%20of%20omics%20compared%20to%20variance%20epxlained-1.png)<!-- -->
+
+``` r
+df_variance_crosscor <- as.data.frame(cbind(calculate_variance_explained(model)$r2_total$single_group,
+                                           c(mean(RNA_crosscor),mean(metabo_crosscor),mean(prot_crosscor)),
+                                           c(dim(RNA_crosscor)[1],dim(metabo_crosscor)[1],dim(prot_crosscor)[1])))
+names(df_variance_crosscor) <- c("var_expl","mean_crosscor","n_features")
+df_variance_crosscor$prod <- sqrt(df_variance_crosscor$mean_crosscor) * df_variance_crosscor$n_features
+
+
+mofa_solved <- ggplot(df_variance_crosscor, aes(x = prod, y = var_expl)) + 
+  geom_point() +
+  geom_smooth(method='lm', formula= y~x) +
+  theme_minimal() +
+  xlab("sqrt(mean cross-corelation of view) * number of features") +
+  ylab("variance explained for each view") +
+  ggtitle("MOFA solved ?")
+
+mofa_solved
+```
+
+![](MOFA_to_COSMOS_files/figure-gfm/Chekc%20cross%20correlation%20of%20omics%20compared%20to%20variance%20epxlained-2.png)<!-- -->
+
+``` r
+mofa_nfeatures <- ggplot(df_variance_crosscor, aes(x = n_features, y = var_expl)) + 
+  geom_point() +
+  geom_smooth(method='lm', formula= y~x) +
+  theme_minimal() +
+  xlab("sqrt(mean cross-corelation of view) * number of features") +
+  ylab("variance explained for each view") +
+  ggtitle("MOFA solved ?")
+
+mofa_nfeatures
+```
+
+![](MOFA_to_COSMOS_files/figure-gfm/Chekc%20cross%20correlation%20of%20omics%20compared%20to%20variance%20epxlained-3.png)<!-- -->
+
+``` r
+summary(lm(data= df_variance_crosscor, var_expl~prod))
+```
+
+    ## 
+    ## Call:
+    ## lm(formula = var_expl ~ prod, data = df_variance_crosscor)
+    ## 
+    ## Residuals:
+    ##      RNA    metab   proteo 
+    ## -0.06207 -0.77553  0.83760 
+    ## 
+    ## Coefficients:
+    ##              Estimate Std. Error t value Pr(>|t|)  
+    ## (Intercept) 1.885e+01  8.542e-01   22.06   0.0288 *
+    ## prod        1.434e-02  5.176e-04   27.70   0.0230 *
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+    ## 
+    ## Residual standard error: 1.143 on 1 degrees of freedom
+    ## Multiple R-squared:  0.9987, Adjusted R-squared:  0.9974 
+    ## F-statistic: 767.1 on 1 and 1 DF,  p-value: 0.02297
+
+``` r
+summary(lm(data= df_variance_crosscor, var_expl~n_features))
+```
+
+    ## 
+    ## Call:
+    ## lm(formula = var_expl ~ n_features, data = df_variance_crosscor)
+    ## 
+    ## Residuals:
+    ##    RNA  metab proteo 
+    ##  1.480  3.426 -4.905 
+    ## 
+    ## Coefficients:
+    ##              Estimate Std. Error t value Pr(>|t|)
+    ## (Intercept) 14.366419   5.255059   2.734    0.223
+    ## n_features   0.007292   0.001446   5.043    0.125
+    ## 
+    ## Residual standard error: 6.163 on 1 degrees of freedom
+    ## Multiple R-squared:  0.9622, Adjusted R-squared:  0.9243 
+    ## F-statistic: 25.43 on 1 and 1 DF,  p-value: 0.1246
+
 Since we would like to use the found correlation for downstream COSMOS
 analysis, we first investigate the variance ($R^2$) each factor can
 explain per view as well as investigate the factor explaining the most
@@ -353,14 +499,13 @@ pheatmap(model@cache$variance_explained$r2_per_factor[[1]], display_numbers = T,
 pheatmap(model@cache$variance_explained$r2_per_factor[[1]], display_numbers = T, angle_col = "0", legend_labels = c("0","10", "20", "30", "40", "Variance\n\n"), legend = T, main = "", legend_breaks = c(0,10, 20, 30, 40, max(model@cache$variance_explained$r2_per_factor[[1]])), cluster_rows = F, cluster_cols = F, color = colorRampPalette(c("white","red"))(100), fontsize_number = 10,filename = "results/mofa/variance_heatmap.pdf",width = 4, height = 2.5)
 ```
 
-By analyzing this heatmap, we can observe that Factor 1 and 3 explain a
+By analyzing this heatmap, we can observe that Factor 1 and 5 explain a
 large proportion of variance of the RNA, Factor 2 mainly explains the
 variance of the metabolomics and Factor 3 highlights variability from
 the proteomics view. Consequently, no factor explains a large portion of
-the variance across all views. To potentially justify to use different
-factor weights downstream for different views, we can analyze the
-correlation between factors. Thus, the next plot highlights the spearman
-correlation between each factor.
+the variance across all views, but factor 2 and 4 capture variance
+across all views. We can also analyze the correlation between factors.
+The next plot highlights the spearman correlation between each factor.
 
 ``` r
 # Investigate factors: Correlation between factors 
@@ -368,73 +513,20 @@ pdf(file="results/mofa/plot_factor_cor.pdf", height = 5, width = 5)
 plot_factor_cor(model, type = 'upper', method = "spearman", addCoef.col = "black")
 ```
 
-Since the correlation between each factor is relatively low, we have to
-choose a single factor. In this case, we are going to use Factor 4,
-since a decent amount of variability from each view is explained.
+Next, we can characterize the factors with the available metadata of
+samples. Indeed, it can be interesting to see if some factors are
+associated with metadata classes, as they can help to guide our
+intepretation of the factors. This part rely on an interpretation of the
+Z matrix of the mofa model, while ignoring the factor weight themselves.
+The factor weights will be analysed subsequently.
 
-Additionally, we can use a beeswarm plot to examine each sample’s factor
-value and to see if we are able to separate the samples based on their
-transcription factor clustering.
-
-``` r
-# Investigate factors: Beeswarm plots of individual factors
-plot_factor(model, 
-                 factors = 'all',
-                 color_by = "cluster",
-                 dot_size = 3,
-                 dodge = T,           
-                 legend = T,          
-                 add_violin = T,     
-                 violin_alpha = 0.25) + 
-   scale_color_manual(values=c("1"="red", "2"="cyan", "3"="orange")) +
-   scale_fill_manual(values=c("1"="red", "2"="cyan", "3"="orange"))
-```
-
-    ## Warning: `fct_explicit_na()` was deprecated in forcats 1.0.0.
-    ## ℹ Please use `fct_na_value_to_level()` instead.
-    ## ℹ The deprecated feature was likely used in the MOFA2 package.
-    ##   Please report the issue at <https://github.com/bioFAM/MOFA2>.
-    ## This warning is displayed once every 8 hours.
-    ## Call `lifecycle::last_lifecycle_warnings()` to see where this warning was
-    ## generated.
-
-![](MOFA_to_COSMOS_files/figure-gfm/Factor%20value%20per%20sample%20and%20factor-1.png)<!-- -->
-
-``` r
-plot_factor(model, 
-                 factors = 4,
-                 color_by = "cluster",
-                 dot_size = 3,
-                 dodge = T,           
-                 legend = T,          
-                 add_violin = T,     
-                 violin_alpha = 0.25) + 
-   scale_color_manual(values=c("1"="red", "2"="cyan", "3"="orange")) +
-   scale_fill_manual(values=c("1"="red", "2"="cyan", "3"="orange"))
-```
-
-![](MOFA_to_COSMOS_files/figure-gfm/Factor%20value%20per%20sample%20and%20factor-2.png)<!-- -->
-
-``` r
-plot_factor(model, 
-                 factors = 'all',
-                 dot_size = 3,
-                 dodge = T,           
-                 legend = T,          
-                 add_violin = T,     
-                 violin_alpha = 0.25)
-```
-
-![](MOFA_to_COSMOS_files/figure-gfm/Factor%20value%20per%20sample%20and%20factor-3.png)<!-- -->
-
-Interestingly, with Factor 4, we have a separation of the samples
-belonging to cluster 2 from samples of cluster 1 and 3. Taking into
-account that this factor mainly explains the variation in the RNA view,
-the samples are classifiable into the clusters especially by
-transcriptomics. This is expected since the assignment of the samples
-was done based on transcription factor clustering via transcriptomics.
-Thus, it was shown that the original structure of the data was conserved
-in the low-dimensional representation via factors.
+To begin simply, we can check if some tissue of origin are associated
+with any of the factors. There are different ways thsi can be done, but
+we find that using a simple linear association between a given tissues
+category in a factor compared to any other tissue categories
+(e.g. breast tissue vs every other tissue types) provide an easy to
+interpret insight that serves our purpose well. To do so, we use the
+Univariate Linear Model (ULM) function of decoupleR
 
 ``` r
 NCI_60_metadata <- as.data.frame(read_csv(file = "data/metadata/RNA_metadata_cluster.csv"))
@@ -469,6 +561,8 @@ palette <- c(palette1, palette2)
 pheatmap(t(tissue_enrichment), show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315,display_numbers = F, filename = "results/mofa/mofa_tissue_enrichment.pdf", width = 3, height = 2.6)
 pheatmap(tissue_enrichment, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315,display_numbers = T)
 ```
+
+Here, we can see that factor 2 seems to be strongly
 
 ``` r
 all_metadata <- reshape2::melt(NCI_60_metadata[,c(1,3,17,5,7,8,10,13,14)], id.vars = "cell_line")
@@ -930,7 +1024,9 @@ PKN.
 
 ``` r
 ## Load and filter meta network
-data("meta_network")
+# data("meta_network")
+# save(meta_network, file = "support/meta_network.RData")
+load("support/meta_network.RData")
 
 meta_network <- meta_network_cleanup(meta_network)
 
@@ -1192,6 +1288,11 @@ MOFA_weights$mofa_weights <- abs(MOFA_weights$mofa_weights)
 
 MOFA_weights <- MOFA_weights %>% group_by(Nodes) %>% summarise_each(funs(max(., na.rm = TRUE)))
 ```
+
+    ## Warning: `summarise_each()` was deprecated in dplyr 0.7.0.
+    ## ℹ Please use `across()` instead.
+    ## Call `lifecycle::last_lifecycle_warnings()` to see where this warning was
+    ## generated.
 
     ## Warning: `funs()` was deprecated in dplyr 0.8.0.
     ## ℹ Please use a list of either functions or lambdas:
@@ -1854,6 +1955,11 @@ combined_ATT_moon <- as.data.frame(rbind(ATT_rec_to_TFmetab, ATT_TF_lig))
 combined_ATT_moon <- combined_ATT_moon %>% group_by(Nodes) %>% summarise_each(funs(mean(., na.rm = TRUE)))
 ```
 
+    ## Warning: `summarise_each()` was deprecated in dplyr 0.7.0.
+    ## ℹ Please use `across()` instead.
+    ## Call `lifecycle::last_lifecycle_warnings()` to see where this warning was
+    ## generated.
+
     ## Warning: `funs()` was deprecated in dplyr 0.8.0.
     ## ℹ Please use a list of either functions or lambdas:
     ## 
@@ -1928,7 +2034,7 @@ sessionInfo()
     ## [10] S4Vectors_0.34.0     Biobase_2.56.0       BiocGenerics_0.42.0 
     ## [13] gridExtra_2.3        pheatmap_1.0.12      moon_0.1.0          
     ## [16] decoupleR_2.5.2      liana_0.1.5          reshape2_1.4.4      
-    ## [19] dplyr_1.1.1          ggfortify_0.4.15     ggplot2_3.4.0       
+    ## [19] dplyr_1.1.3          ggfortify_0.4.15     ggplot2_3.4.0       
     ## [22] readr_2.1.4          MOFA2_1.6.0          cosmosR_1.5.2       
     ## 
     ## loaded via a namespace (and not attached):
@@ -1973,50 +2079,50 @@ sessionInfo()
     ##  [77] base64enc_0.1-3             GlobalOptions_0.1.2        
     ##  [79] processx_3.8.0              png_0.1-8                  
     ##  [81] rjson_0.2.21                bitops_1.0-7               
-    ##  [83] visNetwork_2.1.2            rhdf5filters_1.8.0         
-    ##  [85] Biostrings_2.64.1           blob_1.2.3                 
-    ##  [87] DelayedMatrixStats_1.18.2   shape_1.4.6                
-    ##  [89] stringr_1.5.0               parallelly_1.34.0          
-    ##  [91] beachmat_2.12.0             scales_1.2.1               
-    ##  [93] lpSolve_5.6.17              memoise_2.0.1              
-    ##  [95] magrittr_2.0.3              plyr_1.8.8                 
-    ##  [97] zlibbioc_1.42.0             compiler_4.2.0             
-    ##  [99] dqrng_0.3.0                 clue_0.3-63                
-    ## [101] cli_3.6.1                   XVector_0.36.0             
-    ## [103] urlchecker_1.0.1            listenv_0.9.0              
-    ## [105] ps_1.7.2                    mgcv_1.8-41                
-    ## [107] tidyselect_1.2.0            stringi_1.7.12             
-    ## [109] forcats_1.0.0               textshaping_0.3.6          
-    ## [111] highr_0.10                  yaml_2.3.7                 
-    ## [113] BiocSingular_1.12.0         locfit_1.5-9.7             
-    ## [115] ggrepel_0.9.2               grid_4.2.0                 
-    ## [117] tools_4.2.0                 future.apply_1.10.0        
-    ## [119] parallel_4.2.0              circlize_0.4.15            
-    ## [121] rstudioapi_0.14             uuid_1.1-0                 
-    ## [123] bluster_1.6.0               foreach_1.5.2              
-    ## [125] metapod_1.4.0               farver_2.1.1               
-    ## [127] Rtsne_0.16                  digest_0.6.31              
-    ## [129] BiocManager_1.30.19         shiny_1.7.4                
-    ## [131] Rcpp_1.0.10                 GenomicRanges_1.48.0       
-    ## [133] scuttle_1.6.3               later_1.3.0                
-    ## [135] httr_1.4.5                  ComplexHeatmap_2.12.1      
-    ## [137] colorspace_2.1-0            rvest_1.0.3                
-    ## [139] fs_1.6.1                    reticulate_1.28            
-    ## [141] splines_4.2.0               uwot_0.1.14                
-    ## [143] statmod_1.5.0               OmnipathR_3.9.6            
-    ## [145] sp_1.6-0                    basilisk_1.8.1             
-    ## [147] sessioninfo_1.2.2           systemfonts_1.0.4          
-    ## [149] xtable_1.8-4                jsonlite_1.8.4             
-    ## [151] R6_2.5.1                    profvis_0.3.7              
-    ## [153] pillar_1.9.0                htmltools_0.5.5            
-    ## [155] mime_0.12                   glue_1.6.2                 
-    ## [157] fastmap_1.1.1               BiocParallel_1.30.4        
-    ## [159] BiocNeighbors_1.14.0        codetools_0.2-18           
-    ## [161] pkgbuild_1.4.0              utf8_1.2.3                 
-    ## [163] lattice_0.20-45             tibble_3.2.1               
-    ## [165] logger_0.2.2                curl_5.0.0                 
-    ## [167] limma_3.52.4                rmarkdown_2.21             
-    ## [169] repr_1.1.6                  munsell_0.5.0              
-    ## [171] GetoptLong_1.0.5            rhdf5_2.40.0               
-    ## [173] GenomeInfoDbData_1.2.8      iterators_1.0.14           
-    ## [175] HDF5Array_1.24.2            gtable_0.3.1
+    ##  [83] rhdf5filters_1.8.0          Biostrings_2.64.1          
+    ##  [85] blob_1.2.3                  DelayedMatrixStats_1.18.2  
+    ##  [87] shape_1.4.6                 stringr_1.5.0              
+    ##  [89] parallelly_1.34.0           beachmat_2.12.0            
+    ##  [91] scales_1.2.1                lpSolve_5.6.17             
+    ##  [93] memoise_2.0.1               magrittr_2.0.3             
+    ##  [95] plyr_1.8.8                  zlibbioc_1.42.0            
+    ##  [97] compiler_4.2.0              dqrng_0.3.0                
+    ##  [99] clue_0.3-63                 cli_3.6.1                  
+    ## [101] XVector_0.36.0              urlchecker_1.0.1           
+    ## [103] listenv_0.9.0               ps_1.7.2                   
+    ## [105] mgcv_1.8-41                 tidyselect_1.2.0           
+    ## [107] stringi_1.7.12              forcats_1.0.0              
+    ## [109] textshaping_0.3.6           highr_0.10                 
+    ## [111] yaml_2.3.7                  BiocSingular_1.12.0        
+    ## [113] locfit_1.5-9.7              ggrepel_0.9.2              
+    ## [115] grid_4.2.0                  tools_4.2.0                
+    ## [117] future.apply_1.10.0         parallel_4.2.0             
+    ## [119] circlize_0.4.15             rstudioapi_0.14            
+    ## [121] uuid_1.1-0                  bluster_1.6.0              
+    ## [123] foreach_1.5.2               metapod_1.4.0              
+    ## [125] farver_2.1.1                Rtsne_0.16                 
+    ## [127] digest_0.6.31               BiocManager_1.30.19        
+    ## [129] shiny_1.7.4                 Rcpp_1.0.10                
+    ## [131] GenomicRanges_1.48.0        scuttle_1.6.3              
+    ## [133] later_1.3.0                 httr_1.4.5                 
+    ## [135] ComplexHeatmap_2.12.1       colorspace_2.1-0           
+    ## [137] rvest_1.0.3                 fs_1.6.1                   
+    ## [139] reticulate_1.28             splines_4.2.0              
+    ## [141] uwot_0.1.14                 statmod_1.5.0              
+    ## [143] OmnipathR_3.9.6             sp_1.6-0                   
+    ## [145] basilisk_1.8.1              sessioninfo_1.2.2          
+    ## [147] systemfonts_1.0.4           xtable_1.8-4               
+    ## [149] jsonlite_1.8.4              R6_2.5.1                   
+    ## [151] profvis_0.3.7               pillar_1.9.0               
+    ## [153] htmltools_0.5.5             mime_0.12                  
+    ## [155] glue_1.6.2                  fastmap_1.1.1              
+    ## [157] BiocParallel_1.30.4         BiocNeighbors_1.14.0       
+    ## [159] codetools_0.2-18            pkgbuild_1.4.0             
+    ## [161] utf8_1.2.3                  lattice_0.20-45            
+    ## [163] tibble_3.2.1                logger_0.2.2               
+    ## [165] curl_5.0.0                  limma_3.52.4               
+    ## [167] rmarkdown_2.21              repr_1.1.6                 
+    ## [169] munsell_0.5.0               GetoptLong_1.0.5           
+    ## [171] rhdf5_2.40.0                GenomeInfoDbData_1.2.8     
+    ## [173] iterators_1.0.14            HDF5Array_1.24.2           
+    ## [175] gtable_0.3.1
