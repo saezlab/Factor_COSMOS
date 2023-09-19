@@ -168,6 +168,27 @@ head(mofa_ready_data)
 
 We have successfully combined single omic data sets to a long multi-omics data frame.
 
+```{r Supp figure condition_prot_RNA_correlation}
+condition_prot_RNA_correlation <- sapply(unique(mofa_ready_data$sample), function(condition){
+  merged_data <- merge(mofa_ready_data[which(mofa_ready_data$sample == condition & mofa_ready_data$view == "RNA"),-c(1,3)],
+                       mofa_ready_data[which(mofa_ready_data$sample == condition & mofa_ready_data$view == "proteo"),-c(1,3)],
+                       by = "feature")
+  return(cor(merged_data[,2],merged_data[,3], use = "pairwise.complete.obs"))
+})
+
+hist(condition_prot_RNA_correlation, breaks = 10)
+```
+```{r Supp figure single_prot_RNA_correlation}
+overlap_genes <- unique(intersect(proteo$feature,RNA$feature))
+single_prot_RNA_correlation <- sapply(overlap_genes, function(gene){
+  merged_data <- merge(mofa_ready_data[which(mofa_ready_data$feature == gene & mofa_ready_data$view == "RNA"),-c(2,3)],
+                       mofa_ready_data[which(mofa_ready_data$feature == gene & mofa_ready_data$view == "proteo"),-c(2,3)],
+                       by = "sample")
+  return(cor(merged_data[,2],merged_data[,3], use = "pairwise.complete.obs"))
+})
+
+hist(single_prot_RNA_correlation, breaks = 100)
+```
 ### MOFA run
 
 After pre-processing the data into MOFA appropriate input, let's perform the MOFA analysis. To change specific MOFA options the function write_MOFA_options_file is used. For more information regarding option setting see [MOFA option tutorial](https://raw.githack.com/bioFAM/MOFA2_tutorials/master/R_tutorials/getting_started_R.html). Since we don't know how many factors are needed to explain our data well, various maximum numbers of factors are tested. The final results can be found in the results/mofa/ folder.
@@ -274,6 +295,64 @@ calculate_variance_explained(model)
 The bar plot demonstrates that the nine factors for the view RNA explain more than 50% of the variance. In contrast, for both metabolomics as well as proteomics around 20% of the variance can be explained by all factors.
 
 It isn't unexpected that more variance of the RNA dataset can be reconstructed. Usually, more features available in a given view will lead to a higher % of variance explained. It is interesting to notice though that similar amount of variance are explained for metabolic and proteomic views, despite having very different number of features. thgis may be due to the fact that metabolite abundances are in general more cross-correlated than protein abundances (due to the underlying regulatory structures, e.i. reaction networks vs protein synthesis and degratation regulatory mechanisms).
+
+```{r Chekc cross correlation of omics compared to variance epxlained}
+
+RNA <- dcast(mofa_ready_data[which(mofa_ready_data$view == "RNA"),-3], feature~sample, value.var = "value")
+row.names(RNA) <- RNA[,1]
+RNA <- RNA[,-1]
+
+RNA_crosscor <- cor(t(RNA), use = "pairwise.complete.obs")
+# hist(RNA_crosscor[upper.tri(RNA_crosscor)], breaks = 1000)
+
+prot <- dcast(mofa_ready_data[which(mofa_ready_data$view == "proteo"),-3], feature~sample, value.var = "value")
+row.names(prot) <- prot[,1]
+prot <- prot[,-1]
+
+prot_crosscor <- cor(t(prot), use = "pairwise.complete.obs")
+# hist(prot_crosscor[upper.tri(prot_crosscor)], breaks = 1000)
+
+metabo <- dcast(mofa_ready_data[which(mofa_ready_data$view == "metab"),-3], feature~sample, value.var = "value")
+row.names(metabo) <- metabo[,1]
+metabo <- metabo[,-1]
+
+metabo_crosscor <- cor(t(metabo), use = "pairwise.complete.obs")
+# hist(metabo_crosscor[upper.tri(metabo_crosscor)], breaks = 1000)
+
+# plot(calculate_variance_explained(model)$r2_total$single_group, c(mean(RNA_crosscor),mean(metabo_crosscor),mean(prot_crosscor)))
+plot(calculate_variance_explained(model)$r2_total$single_group, c(dim(RNA_crosscor)[1],dim(metabo_crosscor)[1],dim(prot_crosscor)[1]))
+
+df_variance_crosscor <- as.data.frame(cbind(calculate_variance_explained(model)$r2_total$single_group,
+                                           c(mean(RNA_crosscor),mean(metabo_crosscor),mean(prot_crosscor)),
+                                           c(dim(RNA_crosscor)[1],dim(metabo_crosscor)[1],dim(prot_crosscor)[1])))
+names(df_variance_crosscor) <- c("var_expl","mean_crosscor","n_features")
+df_variance_crosscor$prod <- sqrt(df_variance_crosscor$mean_crosscor) * df_variance_crosscor$n_features
+
+
+mofa_solved <- ggplot(df_variance_crosscor, aes(x = prod, y = var_expl)) + 
+  geom_point() +
+  geom_smooth(method='lm', formula= y~x) +
+  theme_minimal() +
+  xlab("sqrt(mean cross-corelation of view) * number of features") +
+  ylab("variance explained for each view") +
+  ggtitle("MOFA solved ?")
+
+mofa_solved
+
+mofa_nfeatures <- ggplot(df_variance_crosscor, aes(x = n_features, y = var_expl)) + 
+  geom_point() +
+  geom_smooth(method='lm', formula= y~x) +
+  theme_minimal() +
+  xlab("sqrt(mean cross-corelation of view) * number of features") +
+  ylab("variance explained for each view") +
+  ggtitle("MOFA solved ?")
+
+mofa_nfeatures
+
+summary(lm(data= df_variance_crosscor, var_expl~prod))
+summary(lm(data= df_variance_crosscor, var_expl~n_features))
+```
+
 
 Since we would like to use the found correlation for downstream COSMOS analysis, we first investigate the variance ($R^2$) each factor can explain per view as well as investigate the factor explaining the most variance across all views.
 
