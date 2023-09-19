@@ -775,7 +775,9 @@ Next, the prior knowledge network (PKN) is loaded. To see how the full meta PKN 
 
 ```{r Meta network, warning=F}
 ## Load and filter meta network
-data("meta_network")
+# data("meta_network")
+# save(meta_network, file = "support/meta_network.RData")
+load("support/meta_network.RData")
 
 meta_network <- meta_network_cleanup(meta_network)
 
