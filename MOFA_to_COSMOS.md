@@ -1488,7 +1488,9 @@ shown.
 
 ``` r
 ##filter expressed genes from PKN
-data("meta_network")
+# data("meta_network")
+# save(meta_network, file = "support/meta_network.RData")
+load("support/meta_network.RData")
 
 meta_network <- meta_network_cleanup(meta_network)
 
