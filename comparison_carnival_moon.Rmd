@@ -116,6 +116,7 @@ mean(abs(moon_combined[moon_combined$source %in% nodes_predicted_carnival,"score
 mean(abs(moon_combined[moon_combined$source %in% nodes_not_carnival,"score"]))
 ```
 
+#consistent nodes regardless of moon threshold
 ```{r}
 compare_moon_carnival_predicted <- compare_moon_carnival[compare_moon_carnival$Nodes %in% nodes_predicted_carnival,]
 
@@ -147,14 +148,27 @@ write_csv(SIF_carnival_moon, file = "results/cosmos/moon/SIF_carnival_moon.csv")
 write_csv(ATT_carnival_moon, file = "results/cosmos/moon/ATT_carnival_moon.csv")
 ```
 
+Strictly consistent between the two network
 ```{r}
-
+sum(ATT_carnival_moon$CARNIVAL == ATT_carnival_moon$MOON) / length(ATT_carnival_moon[,1])
 ```
 
+Signficant in carnival network and 0 in the moon
 ```{r}
-
+sum(ATT_carnival_moon$CARNIVAL != 0 & ATT_carnival_moon$MOON == 0) / length(ATT_carnival_moon[,1])
+```
+Signficant in moon network and 0 in the carnival
+```{r}
+sum(ATT_carnival_moon$CARNIVAL == 0 & ATT_carnival_moon$MOON != 0) / length(ATT_carnival_moon[,1])
 ```
 
+Strickly different between the two networks
 ```{r}
-
+sum(ATT_carnival_moon$CARNIVAL != 0 & ATT_carnival_moon$MOON != 0 & ATT_carnival_moon$CARNIVAL != ATT_carnival_moon$MOON) / length(ATT_carnival_moon[,1])
 ```
+% of nodes of carnival that are found in moon and % of nodes of moon that are found in carnival
+```{r}
+sum(ATT_carnival_moon$CARNIVAL != 0 & ATT_carnival_moon$MOON != 0 & ATT_carnival_moon$CARNIVAL == ATT_carnival_moon$MOON) / sum(ATT_carnival_moon$CARNIVAL != 0)
+sum(ATT_carnival_moon$CARNIVAL != 0 & ATT_carnival_moon$MOON != 0 & ATT_carnival_moon$CARNIVAL == ATT_carnival_moon$MOON) / sum(ATT_carnival_moon$MOON != 0)
+```
+
