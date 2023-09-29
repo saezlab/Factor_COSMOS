@@ -176,7 +176,7 @@ condition_prot_RNA_correlation <- sapply(unique(mofa_ready_data$sample), functio
   return(cor(merged_data[,2],merged_data[,3], use = "pairwise.complete.obs"))
 })
 
-hist(condition_prot_RNA_correlation, breaks = 10)
+hist(condition_prot_RNA_correlation, breaks = 20)
 ```
 ```{r Supp figure single_prot_RNA_correlation}
 overlap_genes <- unique(intersect(proteo$feature,RNA$feature))
