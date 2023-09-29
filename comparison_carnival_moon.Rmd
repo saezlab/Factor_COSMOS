@@ -165,6 +165,8 @@ sum(ATT_carnival_moon$CARNIVAL == 0 & ATT_carnival_moon$MOON != 0) / length(ATT_
 Strickly different between the two networks
 ```{r}
 sum(ATT_carnival_moon$CARNIVAL != 0 & ATT_carnival_moon$MOON != 0 & ATT_carnival_moon$CARNIVAL != ATT_carnival_moon$MOON) / length(ATT_carnival_moon[,1])
+sum(ATT_carnival_moon$CARNIVAL != 0 & ATT_carnival_moon$MOON != 0 & ATT_carnival_moon$CARNIVAL != ATT_carnival_moon$MOON) / sum(ATT_carnival_moon$CARNIVAL != 0)
+sum(ATT_carnival_moon$CARNIVAL != 0 & ATT_carnival_moon$MOON != 0 & ATT_carnival_moon$CARNIVAL != ATT_carnival_moon$MOON) / sum(ATT_carnival_moon$MOON != 0)
 ```
 % of nodes of carnival that are found in moon and % of nodes of moon that are found in carnival
 ```{r}

@@ -77,8 +77,8 @@ RNA_MOFA$feature <- gsub("_RNA","",RNA_MOFA$feature)
 
 
 
-weights <- data.frame(get_factors(model, factors = "all")$single_group)
-Factor_MOFA <- cbind(rownames(weights), weights)
+Z_matrix <- data.frame(get_factors(model, factors = "all")$single_group)
+Factor_MOFA <- cbind(rownames(Z_matrix), Z_matrix)
 colnames(Factor_MOFA)[1] <- c("sample")
 Factor_MOFA <- Factor_MOFA[which(Factor_MOFA$sample == cell_line),]
 names(Factor_MOFA) <- gsub("Factor","Factor_Z_",names(Factor_MOFA))

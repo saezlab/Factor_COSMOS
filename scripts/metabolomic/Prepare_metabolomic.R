@@ -4,6 +4,8 @@ library(reshape2)
 library(pheatmap)
 library(vsn)
 library(rcompanion)
+library(dplyr)
+library(ggplot2)
 
 # Metabolomic Data From Metabolon - data averaged from triplicate experiments (from https://wiki.nci.nih.gov/display/NCIDTPdata/Molecular+Target+Data)
 #metabs <- as.data.frame(read_csv("data/metabolomic/WEB_DATA_METABOLON.TXT")) 
@@ -83,7 +85,6 @@ write_csv(MetaboliteToHMDB, file = "data/metabolomic/MetaboliteToHMDB.csv")
 pheatmap(metabs_df[complete.cases(metabs_df),], show_colnames = T, show_rownames = F, cluster_rows = F) 
 
 # Save datasets
-
 metabs_df_clean <- metabs_df[complete.cases(metabs_df),]
 metabs_df_clean <- cbind("metabolite" = rownames(metabs_df_clean), metabs_df_clean)
 write_csv(metabs_df_clean, file = "data/metabolomic/metabolomic_clean_vsn.csv")
