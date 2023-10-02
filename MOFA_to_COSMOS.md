@@ -235,7 +235,7 @@ condition_prot_RNA_correlation <- sapply(unique(mofa_ready_data$sample), functio
   return(cor(merged_data[,2],merged_data[,3], use = "pairwise.complete.obs"))
 })
 
-hist(condition_prot_RNA_correlation, breaks = 10)
+hist(condition_prot_RNA_correlation, breaks = 20)
 ```
 
 ![](MOFA_to_COSMOS_files/figure-gfm/Supp%20figure%20condition_prot_RNA_correlation-1.png)<!-- -->
@@ -1945,8 +1945,8 @@ ATT_TF_lig$NodeType <- ifelse(ATT_TF_lig$Nodes %in% ligrec_df$Node1, 2, ifelse(A
 
 names(SIF_TF_lig)[4] <- "Weight"
 
-write_csv(SIF_TF_lig,file = "results/cosmos/moon/SIF_rec_TFmetab.csv")
-write_csv(ATT_TF_lig,file = "results/cosmos/moon/ATT_rec_TFmetab.csv")
+write_csv(SIF_TF_lig,file = "results/cosmos/moon/SIF_TF_lig.csv")
+write_csv(ATT_TF_lig,file = "results/cosmos/moon/ATT_TF_lig.csv")
 ```
 
 ``` r
