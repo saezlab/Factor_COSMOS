@@ -535,6 +535,22 @@ pheatmap(RNA_top, show_rownames = T, cluster_cols = F, cluster_rows = F,color = 
 pheatmap(RNA_top, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315)
 ```
 
+```{r Metabs across factors, fig.width=4, fig.height=2.2}
+
+
+metabs_all <- as.data.frame(weights$metab) 
+row.names(metabs_all) <- gsub("_metab","",row.names(metabs_all))
+
+metabs_top <- metabs_all[order(apply(metabs_all,1,function(x){max(abs(x))}), decreasing = T)[1:10],]
+
+t <- as.vector(t(metabs_top))
+palette1 <- createLinearColors(t[t < 0],withZero = F , maximum = abs(min(t,na.rm = T)) * 10)
+palette2 <- createLinearColors(t[t > 0],withZero = F , maximum = abs(max(t,na.rm = T)) * 10)
+palette <- c(palette1, palette2)
+pheatmap(metabs_top, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315, filename = "results/mofa/mofa_top_metabs.pdf", width = 4, height = 2.2)
+pheatmap(metabs_top, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315)
+```
+
 ```{r LR score estimations across factors, fig.width=4, fig.height=4.3}
 # Calculate regulatory activities from Receptor and Ligand network
 ligrec_factors <- run_ulm(mat = as.matrix(RNA_all), network = ligrec_geneset, .source = set, .target = gene, minsize = 2) 
