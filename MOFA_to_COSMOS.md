@@ -2,10 +2,13 @@
 
 ### Installation and dependency
 
-The legacy network optimisation of COSMOS is done through CARNIVAL.
-CARNIVAL requires the interactive version of IBM Cplex or CBC-COIN
-solver as the network optimizer. The IBM ILOG Cplex is freely available
-through Academic Initiative
+In this tutorial, we use the new Meta-Footprint Analysis MOON to score a
+mechanistic network. However, the legacy network optimisation of COSMOS
+was done through CARNIVAL, which requires the interactive version of IBM
+Cplex or CBC-COIN solver as the network optimizer. Thus, the classic
+cosmos run using the CARNIVAL back end is still presnet in this tutorial
+as a comparison reference, but is optional. IF you wish to reproduce it,
+The IBM ILOG Cplex is freely available through Academic Initiative
 [here](https://community.ibm.com/community/user/datascience/blogs/xavier-nodet1/2020/07/09/cplex-free-for-students).
 As an alternative, the CBC solver is open source and freely available
 for any user, but has a significantly lower performance than CPLEX. The
@@ -188,24 +191,6 @@ names(metab) <- c("sample","feature","view","value")
 ## Merge long data frame to one
 mofa_ready_data <- as.data.frame(do.call(rbind,list(RNA,proteo,metab)))
 
-## Add metadata information (cluster assignment)
-meta_data <- read_csv("data/metadata/RNA_metadata_cluster.csv")[,c(1,2)]
-colnames(meta_data) <- c("sample","cluster")
-mofa_ready_data <- merge(mofa_ready_data, meta_data, by = "sample")
-mofa_ready_data <- mofa_ready_data[,c(1,5,2,3,4)]
-names(mofa_ready_data) <- c("sample","group","feature","view","value")
-
-# Rename clusters
-mofa_ready_data[grepl("1",mofa_ready_data$group),2] <- "cluster_1"
-mofa_ready_data[grepl("2",mofa_ready_data$group),2] <- "cluster_2"
-mofa_ready_data[grepl("3",mofa_ready_data$group),2] <- "cluster_3"
-
-# Optional: Only keep cluster 1 and 3
-#mofa_ready_data <- mofa_ready_data[which(mofa_ready_data$group %in% c("1","3")),]
-
-# Here: Remove group column for unsupervised analysis
-mofa_ready_data <- mofa_ready_data[,-2]
-
 # Save MOFA metadata information and MOFA input
 write_csv(mofa_ready_data, file = "data/mofa/mofa_data.csv")
 ```
@@ -268,6 +253,12 @@ Only run this chunk if you want to re-perform the mofa optimisation. The
 results are already available in the results/mofa folder. We are testing
 various amount of maximum number of factors that MOFA is allowed to
 explore.
+
+You need to instal mofapy2 in python3 to run this chunk. On windows, you
+can simply run “python3” the terminal to make sure its installed or be
+automatically redirected to the windows store page if it’s not. Then,
+you can run “python3 -m pip install –user mofapy2” in a terminal to
+instal the module to python3.
 
 ``` r
 for(i in c(5:15,20,length(unique(mofa_ready_data$sample)))){
@@ -370,7 +361,7 @@ It isn’t unexpected that more variance of the RNA dataset can be
 reconstructed. Usually, more features available in a given view will
 lead to a higher % of variance explained. It is interesting to notice
 though that similar amount of variance are explained for metabolic and
-proteomic views, despite having very different number of features. thgis
+proteomic views, despite having very different number of features. this
 may be due to the fact that metabolite abundances are in general more
 cross-correlated than protein abundances (due to the underlying
 regulatory structures, e.i. reaction networks vs protein synthesis and
@@ -562,7 +553,8 @@ pheatmap(t(tissue_enrichment), show_rownames = T, cluster_cols = F, cluster_rows
 pheatmap(tissue_enrichment, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315,display_numbers = T)
 ```
 
-Here, we can see that factor 2 seems to be strongly
+Here, we can see that factor 4 seems to be strongly associated with
+eukemia, and factor 2 with melanoma.
 
 ``` r
 all_metadata <- reshape2::melt(NCI_60_metadata[,c(1,3,17,5,7,8,10,13,14)], id.vars = "cell_line")
@@ -632,32 +624,6 @@ Using this visualization, features with strong association with the
 factor (large absolute values) can be easily identified and further
 inspected by literature investigation.
 
-Moreover, we can use heatmaps to highlight the coordinated heterogeneity
-that MOFA captures in the original data and define clusters by
-hierarchical clustering. Here, for example, the heatmap for Factor 4 of
-the RNA view using the top 25 feature is shown and hierarchical
-clustering with complete linkage is performed. Additionally, the cluster
-assignment of each sample is depicted.
-
-``` r
-anno_colors <- list(
-  "1"="red", "2"="cyan", "3"="orange"
-)
-
-model@samples_metadata$cluster <- as.character(model@samples_metadata$cluster)
-### RNA
-plot_data_heatmap(model,
-                  view = "RNA",       
-                  factor = 4,             
-                  features =25,          
-                  cluster_rows = T, cluster_cols = T,
-                  show_rownames = T, show_colnames = F,
-                  annotation_samples = "cluster",
-                  annotation_colors = anno_colors)
-```
-
-![](MOFA_to_COSMOS_files/figure-gfm/Heatmap%20RNA%20view%20factor%204-1.png)<!-- -->
-
 Further tools to investigate the latent factors are available inside the
 MOFA framework ([MOFA+: downstream analysis (in
 R)](https://raw.githack.com/bioFAM/MOFA2_tutorials/master/R_tutorials/downstream_analysis.html)).
@@ -680,7 +646,8 @@ RNA <- data.frame(weights$RNA[,4])
 row.names(RNA) <- gsub("_RNA","",row.names(RNA))
 ```
 
-Then we load the consensus networks from our databases.
+Then we load the consensus networks from our databases, as well as the
+TF-targets regulons from collectri.
 
 ``` r
 # Load LIANA (receptor and ligand) consensus network
@@ -701,13 +668,8 @@ ligrec_geneset <- distinct(ligrec_geneset)
 load(file = "support/dorothea_df.RData")
 ```
 
-Then, by using decoupleR and prior knowledge networks, we calculate the
-different regulatory activities inferred by the normalized weighted mean
-approach. Depending on the task, the minimum number of targets per
-source varies required to maintain the source in the output (e.g. two
-targets by definition for ligand-receptor interactions). To calculate
-activities of master regulons through moon, transcription factor
-activities estimated by decoupleR and dorothea are used as an input.
+We can display what are the top weights of the model and to which factor
+they are associated.
 
 ``` r
 RNA_all <- as.data.frame(weights$RNA) 
@@ -722,6 +684,28 @@ palette <- c(palette1, palette2)
 pheatmap(RNA_top, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315, filename = "results/mofa/mofa_top_RNA.pdf", width = 4, height = 4.3)
 pheatmap(RNA_top, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315)
 ```
+
+WE can do the same for metabolites
+
+``` r
+metabs_all <- as.data.frame(weights$metab) 
+row.names(metabs_all) <- gsub("_metab","",row.names(metabs_all))
+
+metabs_top <- metabs_all[order(apply(metabs_all,1,function(x){max(abs(x))}), decreasing = T)[1:10],]
+
+t <- as.vector(t(metabs_top))
+palette1 <- createLinearColors(t[t < 0],withZero = F , maximum = abs(min(t,na.rm = T)) * 10)
+palette2 <- createLinearColors(t[t > 0],withZero = F , maximum = abs(max(t,na.rm = T)) * 10)
+palette <- c(palette1, palette2)
+pheatmap(metabs_top, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315, filename = "results/mofa/mofa_top_metabs.pdf", width = 4, height = 2.2)
+pheatmap(metabs_top, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315)
+```
+
+Then, by using decoupleR and prior knowledge networks, we calculate the
+different regulatory activities inferred by the ULM approach. Depending
+on the task, the minimum number of targets per source varies required to
+maintain the source in the output (e.g. two targets by definition for
+ligand-receptor interactions). Here can display them as heatmaps.
 
 ``` r
 # Calculate regulatory activities from Receptor and Ligand network
@@ -756,6 +740,9 @@ palette <- c(palette1, palette2)
 pheatmap(TF_factors, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315, filename = "results/mofa/mofa_top_TF.pdf", width = 4, height = 4.3)
 pheatmap(TF_factors, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315)
 ```
+
+These activtiy estiamtions are saved in an input file for further
+downstream analysis as well.
 
 ``` r
 # Calculate regulatory activities from Receptor and Ligand network
@@ -802,10 +789,10 @@ infer not only TF activities but also the ligand-receptor interactions.
 
 ### Extracting network with COSMOS to formulate mechanistic hypotheses
 
-In this part the COSMOS run is performed. We can use the output of
-decoupleR (the activities) next to the factor weights as an input for
-COSMOS to specifically focus the analysis on pre-computed data-driven
-results.
+In this next parts the COSMOS run is going to be performed. We can use
+the output of decoupleR (the activities) next to the factor weights as
+an input for COSMOS to specifically focus the analysis on pre-computed
+data-driven results.
 
 Here, in the first step, the data is loaded. Besides the activity
 estimations and the factor weights, the previous filtered out expressed
@@ -871,7 +858,8 @@ ggsave(filename = "results/mofa/RNA_prot_cor.pdf",plot = do.call("grid.arrange",
     ## Saving 7 x 7 in image
 
 ![](MOFA_to_COSMOS_files/figure-gfm/correlation%20RNA/prot-1.png)<!-- -->
-coherently, only the factors where
+Coherently, only the factors where there is variance explained for both
+RNA and proteins are correlated.
 
 Next, we perform filtering steps in order to identify top deregulated
 features. Here, the individual filtering is based on absolute factor
@@ -966,10 +954,12 @@ abline(v = 2.5)}
 ![](MOFA_to_COSMOS_files/figure-gfm/Plot:%20Ligand-receptor%20activity%20estimates-1.png)<!-- -->
 
 Here, only activities higher than 2.5 or lower than -0.5 are kept (see
-straight lines in plot). Since at this point we are interested in the
-receptors, the names are adjusted accordingly and if there are multiple
-mentions of a receptor, its activity is calculated by the mean of the
-associated ligand-receptor interactions.
+straight lines in plot). This is an arbitrary theshold aimed at keeping
+a relativelly high number of interesting fetures to connect in the rest
+of the pipeline. Since at this point we are interested in the receptors,
+the names are adjusted accordingly and if there are multiple mentions of
+a receptor, its activity is calculated by the mean of the associated
+ligand-receptor interactions.
 
 ``` r
 ligrec_input <- ligrec_input[ligrec_input > 2.5 | ligrec_input < -0.5]
@@ -1037,7 +1027,18 @@ meta_network <- meta_network[!(meta_network$source %in% names(metab_to_exclude))
 Then the datasets are merged, entries that are not included in the PKN
 are removed and the filtering steps are completed. The merging in this
 case is based on the idea of deriving the forward network via the
-receptor to transcription factor/metabolite direction.
+receptor to transcription factor/metabolite direction. We will perform
+first the first cosmos run between recptors and downstream TFs and
+metabolites. The second run will focus on connecting TFs awith
+downstream ligands.
+
+Thus, we first define the upstream input as receptors, and the
+downstream input as TFs and metabolites. Since the scoring of the
+network is sensitive to the scale of the downstream measurments, we are
+multiplying the metabolite weights by 10 so that they are on a similar
+scale as the TF scores. Other scaling methods can be performed at the
+user’S discretion, this one is just a rough scaling, but good enough in
+this case.
 
 ``` r
 upstream_inputs <- c(rec_inputs)
@@ -1063,7 +1064,10 @@ At this point, we can perform the COSMOS analysis. Firstly, the options
 for the CARNIVAL run such as the time limit and min gap tolerance are
 set and the user must provide a path to its CPLEX executable. You can
 check the CARNIVAL_options variable to see all possible options that can
-be adjusted.
+be adjusted. This part is only display for reference purposes, but is
+optional. If you wish to run the latest verison of the analysis with
+your data, we advise to run instead the new MOON function, that can be
+found later in this tutorial.
 
 ``` r
 ## Set CARNIVAL options to solve pre-optimization problem
@@ -1468,23 +1472,20 @@ for(node in background){
 }
 ```
 
-### Pathway enrichment analysis
+### MOON (meta footprint analysis)
 
-A potential downstream analysis of the biological network could be to
-search for over-represented pathways. The tutorial
-./Pathway_enrichment_analysis.Rmd explains possible steps.
+In this part, we will run the network scoring to generate mechanistic
+hypotheses connecting ligands, receptors, TFs and metabolites, while
+pruning the network with information from both RNA and protein abundance
+to constrain the flux of signal consistent with the molecular data
+available.
 
-### Network visualization via CytoScape
+This method is easier to set up and interpret than the classic cosmos
+run that relies on CPLEX and CARNIVAL.
 
-Further, we can analyze the biological network by visualization through
-CytoScape. A tutorial for that is given under ./RCytoScape_tutorial.Rmd.
-
-Here, a potential output of this analysis highlighting a sub pathway is
-shown.
-
-![alt text](results/cytoscape/sub_pathway_figure.pdf "Title")
-
-### MOON (meta footprint analysis) as a CANRIVAL alternative
+In this approach, the network is compressed to avoid having redundant
+paths in the network leading to inflating the importance of some input
+measurements.
 
 ``` r
 ##filter expressed genes from PKN
@@ -1612,6 +1613,14 @@ load(file = "support/dorothea_df.RData")
 RNA_input <- as.numeric(weights$RNA[,4])
 names(RNA_input) <- gsub("_RNA$","",row.names(weights$RNA))
 ```
+
+In this step. we run the first moon analysis, to connect receptors with
+downstream TFs and ligands. MOON function is run iterativelly in a loop
+until the resulting scored network does not include edges incoherent
+with the RNA and proteomic data measurents. then, the network is
+decompressed, IDs are translated in a human-friendly format and a
+subnetowrk comparable to the classic cosmos solution network is
+generated with the reduce_solution_network function.
 
 ``` r
 data("HMDB_mapper_vec")
@@ -1752,6 +1761,10 @@ names(SIF_rec_to_TFmetab)[4] <- "Weight"
 write_csv(SIF_rec_to_TFmetab,file = "results/cosmos/moon/SIF_rec_TFmetab.csv")
 write_csv(ATT_rec_to_TFmetab,file = "results/cosmos/moon/ATT_rec_TFmetab.csv")
 ```
+
+Next, we also score a network connecting the TF with downstream ligands.
+The procedure is the same as the previous section, only the upstream and
+downstream input definition is changing.
 
 ``` r
 ##filter expressed genes from PKN
@@ -1949,6 +1962,10 @@ write_csv(SIF_TF_lig,file = "results/cosmos/moon/SIF_TF_lig.csv")
 write_csv(ATT_TF_lig,file = "results/cosmos/moon/ATT_TF_lig.csv")
 ```
 
+Both networks (Receptos -\> TF and metabs; TF -\> Ligands) are merged
+together into a single compbined scored network. WE also add the
+conecitons between ligands and their corresponding receptors.
+
 ``` r
 combined_SIF_moon <- as.data.frame(rbind(SIF_rec_to_TFmetab, SIF_TF_lig))
 combined_SIF_moon <- unique(combined_SIF_moon)
@@ -1998,15 +2015,9 @@ write_csv(moon_res_TF_lig, file = "results/cosmos/moon/moon_res_TF_lig.csv")
 
 ### Further analyses
 
-Further MOFA-COSMOS downstream analyses focusing on analyzing cell line
-specific MOFA transcriptomics are given in
-./Further_MOFA_COSMOS_analyses.Rmd.
-
-``` r
-## Select nodes 
-interesting_nodes <- data.frame("name" = c("VEGFA","HIF1A","PRKCA","BNIP3","DAG1","ACO1","JAK1","ABL1","ITGB1","STAT1","PRKACA","MYC"))
-# nodes_cellline_weight_filtered <- nodes_cellline_weight[rownames(nodes_cellline_weight) %in% interesting_nodes$name,]
-```
+Further MOFA-COSMOS downstream analyses focusing on analyzing network
+control structures and cell line specific MOFA transcriptomics are given
+in ./pathway_control_analysis_moon.Rmd and ./Cell_line_MOFA_space.Rmd
 
 ### Session info
 
