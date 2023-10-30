@@ -212,6 +212,9 @@ head(mofa_ready_data)
 We have successfully combined single omic data sets to a long
 multi-omics data frame.
 
+In this part we assess the correlation between the RNA and proteomic
+data. We both look for correlation across samples AND across features
+
 ``` r
 condition_prot_RNA_correlation <- sapply(unique(mofa_ready_data$sample), function(condition){
   merged_data <- merge(mofa_ready_data[which(mofa_ready_data$sample == condition & mofa_ready_data$view == "RNA"),-c(1,3)],
@@ -368,6 +371,7 @@ regulatory structures, e.i. reaction networks vs protein synthesis and
 degratation regulatory mechanisms).
 
 ``` r
+#Get the cross correlation for RNA and proteomic data
 RNA <- dcast(mofa_ready_data[which(mofa_ready_data$view == "RNA"),-3], feature~sample, value.var = "value")
 row.names(RNA) <- RNA[,1]
 RNA <- RNA[,-1]
@@ -402,14 +406,14 @@ df_variance_crosscor <- as.data.frame(cbind(calculate_variance_explained(model)$
 names(df_variance_crosscor) <- c("var_expl","mean_crosscor","n_features")
 df_variance_crosscor$prod <- sqrt(df_variance_crosscor$mean_crosscor) * df_variance_crosscor$n_features
 
-
+#Just plot them as scatter plot with regression lines
 mofa_solved <- ggplot(df_variance_crosscor, aes(x = prod, y = var_expl)) + 
   geom_point() +
   geom_smooth(method='lm', formula= y~x) +
   theme_minimal() +
   xlab("sqrt(mean cross-corelation of view) * number of features") +
   ylab("variance explained for each view") +
-  ggtitle("MOFA solved ?")
+  ggtitle("MOFA size and cross cor influence")
 
 mofa_solved
 ```
@@ -423,7 +427,7 @@ mofa_nfeatures <- ggplot(df_variance_crosscor, aes(x = n_features, y = var_expl)
   theme_minimal() +
   xlab("sqrt(mean cross-corelation of view) * number of features") +
   ylab("variance explained for each view") +
-  ggtitle("MOFA solved ?")
+  ggtitle("MOFA size influence")
 
 mofa_nfeatures
 ```
@@ -431,6 +435,7 @@ mofa_nfeatures
 ![](MOFA_to_COSMOS_files/figure-gfm/Chekc%20cross%20correlation%20of%20omics%20compared%20to%20variance%20epxlained-3.png)<!-- -->
 
 ``` r
+#Get the actual coeficient signficance
 summary(lm(data= df_variance_crosscor, var_expl~prod))
 ```
 
@@ -533,6 +538,7 @@ NCI_60_metadata <- as.data.frame(read_csv(file = "data/metadata/RNA_metadata_clu
     ## ℹ Specify the column types or set `show_col_types = FALSE` to quiet this message.
 
 ``` r
+#discretize age category so that regression can be applied
 NCI_60_metadata$`age over 50` <- NCI_60_metadata$`age a` > 50
 tissues <-NCI_60_metadata[,c(3,1)]
 names(tissues) <- c("source","target")
@@ -540,11 +546,13 @@ names(tissues) <- c("source","target")
   
 Z_matrix <- as.data.frame(model@expectations$Z$single_group)
 
+#Check specifically tissue meta-data association with Z matrix
 tissue_enrichment <- decoupleR::run_ulm(Z_matrix, tissues)
 tissue_enrichment <- reshape2::dcast(tissue_enrichment, source~condition, value.var = "score")
 row.names(tissue_enrichment) <- tissue_enrichment$source
 tissue_enrichment <- tissue_enrichment[,-1]
 
+#plot them as heatmaps
 t <- as.vector(t(tissue_enrichment))
 palette1 <- createLinearColors(t[t < 0],withZero = F , maximum = abs(min(t,na.rm = T)) * 10)
 palette2 <- createLinearColors(t[t > 0],withZero = F , maximum = abs(max(t,na.rm = T)) * 10)
@@ -557,6 +565,7 @@ Here, we can see that factor 4 seems to be strongly associated with
 eukemia, and factor 2 with melanoma.
 
 ``` r
+#format meta-data names
 all_metadata <- reshape2::melt(NCI_60_metadata[,c(1,3,17,5,7,8,10,13,14)], id.vars = "cell_line")
 all_metadata$variable <- gsub(" a$","",all_metadata$variable)
 all_metadata$variable <- gsub(" a,c$","",all_metadata$variable)
@@ -575,6 +584,7 @@ names(all_metadata) <- c("source","target")
   
 Z_matrix <- as.data.frame(model@expectations$Z$single_group)
 
+#run ULM on the Z matrix meta data to find associated metadata features
 all_metadata_enrichment <- decoupleR::run_ulm(Z_matrix, all_metadata, minsize = 3)
 all_metadata_enrichment <- reshape2::dcast(all_metadata_enrichment, source~condition, value.var = "score")
 row.names(all_metadata_enrichment) <- all_metadata_enrichment$source
@@ -583,6 +593,7 @@ all_metadata_enrichment_top <- all_metadata_enrichment[
   apply(all_metadata_enrichment, 1, function(x){max(abs(x)) > 2}),
 ]
 
+#Plot the heatmap
 t <- as.vector(t(all_metadata_enrichment_top))
 palette1 <- createLinearColors(t[t < 0],withZero = F , maximum = abs(min(t,na.rm = T)) * 10)
 palette2 <- createLinearColors(t[t > 0],withZero = F , maximum = abs(max(t,na.rm = T)) * 10)
@@ -653,6 +664,8 @@ TF-targets regulons from collectri.
 # Load LIANA (receptor and ligand) consensus network
 # ligrec_ressource <- distinct(liana::decomplexify(liana::select_resource("Consensus")[[1]]))
 # save(ligrec_ressource, file = "support/ligrec_ressource.RData")
+
+#process the LR interaction prior knowledge to make suitable input for decoupleR
 load(file = "support/ligrec_ressource.RData")
 ligrec_geneset <- ligrec_ressource[,c("source_genesymbol","target_genesymbol")]
 ligrec_geneset$set <- paste(ligrec_geneset$source_genesymbol, ligrec_geneset$target_genesymbol, sep = "___")
@@ -675,8 +688,10 @@ they are associated.
 RNA_all <- as.data.frame(weights$RNA) 
 row.names(RNA_all) <- gsub("_RNA","",row.names(RNA_all))
 
+#Extract the top weights
 RNA_top <- RNA_all[order(apply(RNA_all,1,function(x){max(abs(x))}), decreasing = T)[1:25],]
 
+#plot them as heatmaps
 t <- as.vector(t(RNA_top))
 palette1 <- createLinearColors(t[t < 0],withZero = F , maximum = abs(min(t,na.rm = T)) * 10)
 palette2 <- createLinearColors(t[t > 0],withZero = F , maximum = abs(max(t,na.rm = T)) * 10)
@@ -691,8 +706,10 @@ WE can do the same for metabolites
 metabs_all <- as.data.frame(weights$metab) 
 row.names(metabs_all) <- gsub("_metab","",row.names(metabs_all))
 
+#extract top metab weights
 metabs_top <- metabs_all[order(apply(metabs_all,1,function(x){max(abs(x))}), decreasing = T)[1:10],]
 
+#plot them as heatmaps
 t <- as.vector(t(metabs_top))
 palette1 <- createLinearColors(t[t < 0],withZero = F , maximum = abs(min(t,na.rm = T)) * 10)
 palette2 <- createLinearColors(t[t > 0],withZero = F , maximum = abs(max(t,na.rm = T)) * 10)
@@ -716,7 +733,7 @@ ligrec_factors_df <- ligrec_factors_df[,-1]
 ligrec_factors_df <- ligrec_factors_df[order(apply(ligrec_factors_df,1,function(x){max(abs(x))}), decreasing = T)[1:25],]
 
 
-
+#plot them as heatmaps
 t <- as.vector(t(ligrec_factors_df))
 palette1 <- createLinearColors(t[t < 0],withZero = F , maximum = abs(min(t,na.rm = T)) * 10)
 palette2 <- createLinearColors(t[t > 0],withZero = F , maximum = abs(max(t,na.rm = T)) * 10)
@@ -733,6 +750,7 @@ row.names(TF_factors) <- TF_factors$source
 TF_factors <- TF_factors[,-1]
 TF_factors <- TF_factors[order(apply(TF_factors,1,function(x){max(abs(x))}), decreasing = T)[1:25],]
 
+#Plot them as heatmaps
 t <- as.vector(t(TF_factors))
 palette1 <- createLinearColors(t[t < 0],withZero = F , maximum = abs(min(t,na.rm = T)) * 10)
 palette2 <- createLinearColors(t[t > 0],withZero = F , maximum = abs(max(t,na.rm = T)) * 10)
@@ -809,6 +827,7 @@ RNA_input <- weights$RNA[,4]
 prot_input <- weights$proteo[,4]
 metab_inputs <- weights$metab[,4]
 
+#remove MOFA tags from feature names
 names(RNA_input) <- gsub("_RNA","",names(RNA_input))
 names(prot_input) <- gsub("_proteo","",names(prot_input))
 
@@ -1118,9 +1137,12 @@ After pre-optimization, we can perform the actual COSMOS run using the
 pre-optimized solution.
 
 ``` r
+start_time <- Sys.time()
 run_rec_to_TF <- run_COSMOS_signaling_to_metabolism(data = pre_run_rec_to_TF,
                                                     CARNIVAL_options = my_options)
 run_rec_to_TF <- cosmosR::format_COSMOS_res(run_rec_to_TF, metab_mapping = HMDB_mapper_vec)
+end_time <- Sys.time()
+end_time - start_time
 save(run_rec_to_TF, file = "results/cosmos/run_rec_to_TF.Rdata")
 ```
 
@@ -1235,17 +1257,18 @@ out inactive nodes.
 ``` r
 load("results/cosmos/run_TF_to_lig.Rdata")
 
-
+#remove interactions that are not part of solution network
 SIF_TF_to_lig <- as.data.frame(run_TF_to_lig[[1]])
 SIF_TF_to_lig <- SIF_TF_to_lig[which(SIF_TF_to_lig$Weight != 0),]
 
-
+#Keep the information about which node was an input data
 ATT_TF_to_lig <- as.data.frame(run_TF_to_lig[[2]])
 colnames(ATT_TF_to_lig)[1] <- "Nodes"
 ATT_TF_to_lig$measured <- ifelse(ATT_TF_to_lig$NodeType %in% c("M","T","S","P"),1,0)
 ATT_TF_to_lig$Activity <- ATT_TF_to_lig$AvgAct
 ATT_TF_to_lig <- ATT_TF_to_lig[ATT_TF_to_lig$AvgAct != 0,]
 
+#save the results
 res_mofa_TF_to_lig <- list(SIF_TF_to_lig,ATT_TF_to_lig)
 save(res_mofa_TF_to_lig, file = "results/cosmos/res_mofamoon_TF_to_lig.RData")
 write_csv(SIF_TF_to_lig, file = "results/cosmos/SIF_mofamoon_TF_to_lig.csv")
@@ -1632,13 +1655,18 @@ after <- 0
 i <- 1
 while (before != after & i < 10) {
   before <- length(meta_network_rec_to_TFmetab[,1])
-  recursive_decoupleRnival_res <- cosmosR::moon(upstream_input = upstream_inputs_filtered, 
+  start_time <- Sys.time()
+  moon_res <- cosmosR::moon(upstream_input = upstream_inputs_filtered, 
                                                  downstream_input = downstream_inputs_filtered, 
                                                  meta_network = meta_network_rec_to_TFmetab, 
                                                  n_layers = n_steps, 
                                                  statistic = "ulm") 
   
-  meta_network_rec_to_TFmetab <- filter_incohrent_TF_target(recursive_decoupleRnival_res, dorothea_df, meta_network_rec_to_TFmetab, RNA_input)
+  meta_network_rec_to_TFmetab <- filter_incohrent_TF_target(moon_res, dorothea_df, meta_network_rec_to_TFmetab, RNA_input)
+  end_time <- Sys.time()
+  
+  print(end_time - start_time)
+  
   after <- length(meta_network_rec_to_TFmetab[,1])
   i <- i + 1
 }
@@ -1649,11 +1677,13 @@ while (before != after & i < 10) {
     ## [1] 4
     ## [1] 5
     ## [1] 6
+    ## Time difference of 0.2281651 secs
     ## [1] 2
     ## [1] 3
     ## [1] 4
     ## [1] 5
     ## [1] 6
+    ## Time difference of 0.249064 secs
 
 ``` r
 if(i < 10)
@@ -1686,10 +1716,10 @@ addons <- as.data.frame(rbind(addons,final_leaves))
 
 mapping_table <- as.data.frame(rbind(duplicated_parents_df,addons))
 
-recursive_decoupleRnival_res <- merge(recursive_decoupleRnival_res, mapping_table, by = "source")
+moon_res <- merge(moon_res, mapping_table, by = "source")
 
 #save the whole res for later
-moon_res_rec_to_TFmet <- recursive_decoupleRnival_res[,c(4,2,3)]
+moon_res_rec_to_TFmet <- moon_res[,c(4,2,3)]
 moon_res_rec_to_TFmet[,1] <- sapply(moon_res_rec_to_TFmet[,1], function(x, HMDB_mapper_vec) {
     x <- gsub("Metab__", "", x)
     x <- gsub("^Gene", "Enzyme", x)
@@ -1705,16 +1735,16 @@ moon_res_rec_to_TFmet[,1] <- sapply(moon_res_rec_to_TFmet[,1], function(x, HMDB_
     return(x)
   }, HMDB_mapper_vec = HMDB_mapper_vec)
 
-levels <- recursive_decoupleRnival_res[,c(1,3)]
+levels <- moon_res[,c(1,3)]
 
 
 
-levels <- recursive_decoupleRnival_res[,c(4,3)]
+levels <- moon_res[,c(4,3)]
 
-recursive_decoupleRnival_res <- recursive_decoupleRnival_res[,c(4,2)]
-names(recursive_decoupleRnival_res)[1] <- "source"
+moon_res <- moon_res[,c(4,2)]
+names(moon_res)[1] <- "source"
 
-plot(density(recursive_decoupleRnival_res$score))
+plot(density(moon_res$score))
 abline(v = 1)
 abline(v = -1)
 ```
@@ -1722,7 +1752,7 @@ abline(v = -1)
 ![](MOFA_to_COSMOS_files/figure-gfm/Run%20moon%20rec_to_TFmetab-1.png)<!-- -->
 
 ``` r
-solution_network <- reduce_solution_network(decoupleRnival_res = recursive_decoupleRnival_res, 
+solution_network <- reduce_solution_network(decoupleRnival_res = moon_res, 
                                             meta_network = meta_network_filtered,
                                             cutoff = 1.5, 
                                             upstream_input = upstream_inputs_filtered, 
@@ -1871,13 +1901,13 @@ after <- 0
 i <- 1
 while (before != after & i < 10) {
   before <- length(meta_network_TF_lig[,1])
-  recursive_decoupleRnival_res <- cosmosR::moon(upstream_input = upstream_inputs_filtered, 
+  moon_res <- cosmosR::moon(upstream_input = upstream_inputs_filtered, 
                                                  downstream_input = downstream_inputs_filtered, 
                                                  meta_network = meta_network_TF_lig, 
                                                  n_layers = n_steps, 
                                                  statistic = "ulm") 
   
-  meta_network_TF_lig <- filter_incohrent_TF_target(recursive_decoupleRnival_res, dorothea_df, meta_network_TF_lig, RNA_input)
+  meta_network_TF_lig <- filter_incohrent_TF_target(moon_res, dorothea_df, meta_network_TF_lig, RNA_input)
   after <- length(meta_network_TF_lig[,1])
   i <- i + 1
 }
@@ -1894,7 +1924,7 @@ if(i < 10)
     ## [1] "Converged after 1 iterations"
 
 ``` r
-moon_res_TF_lig <-recursive_decoupleRnival_res
+moon_res_TF_lig <-moon_res
 moon_res_TF_lig[,1] <- sapply(moon_res_TF_lig[,1], function(x, HMDB_mapper_vec) {
     x <- gsub("Metab__", "", x)
     x <- gsub("^Gene", "Enzyme", x)
@@ -1910,12 +1940,12 @@ moon_res_TF_lig[,1] <- sapply(moon_res_TF_lig[,1], function(x, HMDB_mapper_vec) 
     return(x)
   }, HMDB_mapper_vec = HMDB_mapper_vec)
 
-levels <- recursive_decoupleRnival_res[,c(1,3)]
+levels <- moon_res[,c(1,3)]
 
-recursive_decoupleRnival_res <- recursive_decoupleRnival_res[,c(1,2)]
-names(recursive_decoupleRnival_res)[1] <- "source"
+moon_res <- moon_res[,c(1,2)]
+names(moon_res)[1] <- "source"
 
-plot(density(recursive_decoupleRnival_res$score))
+plot(density(moon_res$score))
 abline(v = 1)
 abline(v = -1)
 ```
@@ -1923,7 +1953,7 @@ abline(v = -1)
 ![](MOFA_to_COSMOS_files/figure-gfm/run%20moon%20TF%20to%20lig-1.png)<!-- -->
 
 ``` r
-solution_network <- reduce_solution_network(decoupleRnival_res = recursive_decoupleRnival_res, 
+solution_network <- reduce_solution_network(decoupleRnival_res = moon_res, 
                                             meta_network = as.data.frame(dorothea_PKN_filtered[,c(1,3,2)]),
                                             cutoff = 1.5, 
                                             upstream_input = upstream_inputs_filtered, 
