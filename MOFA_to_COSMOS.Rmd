@@ -29,6 +29,15 @@ if (!requireNamespace("devtools", quietly = TRUE)) install.packages("devtools")
 if (!requireNamespace("cosmosR", quietly = TRUE)) devtools::install_github("saezlab/cosmosR")
 ```
 
+```{r decoupleR installation}
+if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+if (!requireNamespace("decoupleR", quietly = TRUE)) BiocManager::install("saezlab/decoupleR")
+```
+```{r LIANA installation}
+if (!requireNamespace("remotes", quietly = TRUE)) install.packages("remotes")
+if (!requireNamespace("liana", quietly = TRUE)) remotes::install_github('saezlab/liana')
+```
+
 We are using MOFA2 (Argelaguet et al., 2018) to find decompose variance across different omics and use COSMOS to find mechanistic interpretations of its factors. However, since we are using the python version of MOFA2, please make sure to have [mofapy2](https://github.com/bioFAM/mofapy2) as well as panda and numpy installed in your (conda) environment (e.g. by using reticulate: reticulate::use_condaenv("base", required = T) %\>% reticulate::conda_install(c("mofapy2","panda","numpy")). For downstream analysis, the R version of MOFA2 is used.
 
 ```{r MOFA2 installation, message=FALSE}
@@ -51,10 +60,8 @@ library(dplyr)
 library(reshape2)
 library(liana)
 library(decoupleR)
-library(moon)
 library(pheatmap)
 library(gridExtra)
-library(liana)
 library(GSEABase)
 library(tidyr)
 library(RCy3)

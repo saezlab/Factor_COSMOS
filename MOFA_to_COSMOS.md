@@ -29,6 +29,16 @@ if (!requireNamespace("devtools", quietly = TRUE)) install.packages("devtools")
 if (!requireNamespace("cosmosR", quietly = TRUE)) devtools::install_github("saezlab/cosmosR")
 ```
 
+``` r
+if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+if (!requireNamespace("decoupleR", quietly = TRUE)) BiocManager::install("saezlab/decoupleR")
+```
+
+``` r
+if (!requireNamespace("remotes", quietly = TRUE)) install.packages("remotes")
+if (!requireNamespace("liana", quietly = TRUE)) remotes::install_github('saezlab/liana')
+```
+
 We are using MOFA2 (Argelaguet et al., 2018) to find decompose variance
 across different omics and use COSMOS to find mechanistic
 interpretations of its factors. However, since we are using the python
@@ -62,10 +72,8 @@ library(dplyr)
 library(reshape2)
 library(liana)
 library(decoupleR)
-library(moon)
 library(pheatmap)
 library(gridExtra)
-library(liana)
 library(GSEABase)
 library(tidyr)
 library(RCy3)
@@ -1650,13 +1658,13 @@ while (before != after & i < 10) {
     ## [1] 4
     ## [1] 5
     ## [1] 6
-    ## Time difference of 0.2323902 secs
+    ## Time difference of 0.24226 secs
     ## [1] 2
     ## [1] 3
     ## [1] 4
     ## [1] 5
     ## [1] 6
-    ## Time difference of 0.251807 secs
+    ## Time difference of 0.2922752 secs
 
 ``` r
 if(i < 10)
@@ -2000,10 +2008,10 @@ sessionInfo()
     ##  [4] GSEABase_1.58.0      graph_1.74.0         annotate_1.74.0     
     ##  [7] XML_3.99-0.13        AnnotationDbi_1.58.0 IRanges_2.30.1      
     ## [10] S4Vectors_0.34.0     Biobase_2.56.0       BiocGenerics_0.42.0 
-    ## [13] gridExtra_2.3        pheatmap_1.0.12      moon_0.1.0          
-    ## [16] decoupleR_2.5.2      liana_0.1.5          reshape2_1.4.4      
-    ## [19] dplyr_1.1.3          ggfortify_0.4.15     ggplot2_3.4.0       
-    ## [22] readr_2.1.4          MOFA2_1.6.0          cosmosR_1.5.2       
+    ## [13] gridExtra_2.3        pheatmap_1.0.12      decoupleR_2.5.2     
+    ## [16] liana_0.1.5          reshape2_1.4.4       dplyr_1.1.3         
+    ## [19] ggfortify_0.4.15     ggplot2_3.4.0        readr_2.1.4         
+    ## [22] MOFA2_1.6.0          cosmosR_1.5.2       
     ## 
     ## loaded via a namespace (and not attached):
     ##   [1] rappdirs_0.3.3              pbdZMQ_0.3-9               
@@ -2050,8 +2058,8 @@ sessionInfo()
     ##  [83] rhdf5filters_1.8.0          Biostrings_2.64.1          
     ##  [85] blob_1.2.3                  DelayedMatrixStats_1.18.2  
     ##  [87] shape_1.4.6                 stringr_1.5.0              
-    ##  [89] parallelly_1.34.0           beachmat_2.12.0            
-    ##  [91] scales_1.2.1                lpSolve_5.6.17             
+    ##  [89] parallelly_1.34.0           lpSolve_5.6.17             
+    ##  [91] beachmat_2.12.0             scales_1.2.1               
     ##  [93] memoise_2.0.1               magrittr_2.0.3             
     ##  [95] plyr_1.8.8                  zlibbioc_1.42.0            
     ##  [97] compiler_4.2.0              dqrng_0.3.0                
