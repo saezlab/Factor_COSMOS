@@ -72,6 +72,7 @@ library(RCy3)
 library(RColorBrewer)
 
 source("scripts/support_pheatmap_colors.R")
+source("scripts/support_functions.R")
 ```
 
 ### From omics data to MOFA ready input
@@ -553,10 +554,7 @@ row.names(tissue_enrichment) <- tissue_enrichment$source
 tissue_enrichment <- tissue_enrichment[,-1]
 
 #plot them as heatmaps
-t <- as.vector(t(tissue_enrichment))
-palette1 <- createLinearColors(t[t < 0],withZero = F , maximum = abs(min(t,na.rm = T)) * 10)
-palette2 <- createLinearColors(t[t > 0],withZero = F , maximum = abs(max(t,na.rm = T)) * 10)
-palette <- c(palette1, palette2)
+palette <- make_heatmap_color_palette(tissue_enrichment)
 pheatmap(t(tissue_enrichment), show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315,display_numbers = F, filename = "results/mofa/mofa_tissue_enrichment.pdf", width = 3, height = 2.6)
 pheatmap(tissue_enrichment, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315,display_numbers = T)
 ```
@@ -594,10 +592,7 @@ all_metadata_enrichment_top <- all_metadata_enrichment[
 ]
 
 #Plot the heatmap
-t <- as.vector(t(all_metadata_enrichment_top))
-palette1 <- createLinearColors(t[t < 0],withZero = F , maximum = abs(min(t,na.rm = T)) * 10)
-palette2 <- createLinearColors(t[t > 0],withZero = F , maximum = abs(max(t,na.rm = T)) * 10)
-palette <- c(palette1, palette2)
+palette <- make_heatmap_color_palette(all_metadata_enrichment_top)
 pheatmap(t(all_metadata_enrichment_top), show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315,display_numbers = F, filename = "results/mofa/mofa_metadata_enrichment.pdf", width = 4.5, height = 4)
 pheatmap(t(all_metadata_enrichment_top), show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315,display_numbers = T)
 ```
@@ -652,6 +647,7 @@ weights from Factor 4 in the RNA view.
 ``` r
 weights <- get_weights(model, views = "all", factors = "all")
 
+save(weights, file = "results/mofa/mofa_weights.RData")
 # Extract Factor with highest explained variance in RNA view
 RNA <- data.frame(weights$RNA[,4]) 
 row.names(RNA) <- gsub("_RNA","",row.names(RNA))
@@ -667,13 +663,7 @@ TF-targets regulons from collectri.
 
 #process the LR interaction prior knowledge to make suitable input for decoupleR
 load(file = "support/ligrec_ressource.RData")
-ligrec_geneset <- ligrec_ressource[,c("source_genesymbol","target_genesymbol")]
-ligrec_geneset$set <- paste(ligrec_geneset$source_genesymbol, ligrec_geneset$target_genesymbol, sep = "___")
-ligrec_geneset <- reshape2::melt(ligrec_geneset, id.vars = "set")[,c(3,1)]
-names(ligrec_geneset)[1] <- "gene"
-ligrec_geneset$mor <- 1
-ligrec_geneset$likelihood <- 1
-ligrec_geneset <- distinct(ligrec_geneset)
+ligrec_geneset <- format_LR_ressource(ligrec_ressource)
 
 # Load Dorothea (TF) network
 # dorothea_df <- decoupleR::get_collectri()
@@ -692,10 +682,7 @@ row.names(RNA_all) <- gsub("_RNA","",row.names(RNA_all))
 RNA_top <- RNA_all[order(apply(RNA_all,1,function(x){max(abs(x))}), decreasing = T)[1:25],]
 
 #plot them as heatmaps
-t <- as.vector(t(RNA_top))
-palette1 <- createLinearColors(t[t < 0],withZero = F , maximum = abs(min(t,na.rm = T)) * 10)
-palette2 <- createLinearColors(t[t > 0],withZero = F , maximum = abs(max(t,na.rm = T)) * 10)
-palette <- c(palette1, palette2)
+palette <- make_heatmap_color_palette(RNA_top)
 pheatmap(RNA_top, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315, filename = "results/mofa/mofa_top_RNA.pdf", width = 4, height = 4.3)
 pheatmap(RNA_top, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315)
 ```
@@ -710,10 +697,7 @@ row.names(metabs_all) <- gsub("_metab","",row.names(metabs_all))
 metabs_top <- metabs_all[order(apply(metabs_all,1,function(x){max(abs(x))}), decreasing = T)[1:10],]
 
 #plot them as heatmaps
-t <- as.vector(t(metabs_top))
-palette1 <- createLinearColors(t[t < 0],withZero = F , maximum = abs(min(t,na.rm = T)) * 10)
-palette2 <- createLinearColors(t[t > 0],withZero = F , maximum = abs(max(t,na.rm = T)) * 10)
-palette <- c(palette1, palette2)
+palette <- make_heatmap_color_palette(metabs_top)
 pheatmap(metabs_top, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315, filename = "results/mofa/mofa_top_metabs.pdf", width = 4, height = 2.2)
 pheatmap(metabs_top, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315)
 ```
@@ -727,17 +711,12 @@ ligand-receptor interactions). Here can display them as heatmaps.
 ``` r
 # Calculate regulatory activities from Receptor and Ligand network
 ligrec_factors <- run_ulm(mat = as.matrix(RNA_all), network = ligrec_geneset, .source = set, .target = gene, minsize = 2) 
-ligrec_factors_df <- reshape2::dcast(ligrec_factors, formula = source~condition, value.var = "score")
-row.names(ligrec_factors_df) <- ligrec_factors_df$source
-ligrec_factors_df <- ligrec_factors_df[,-1]
+ligrec_factors_df <- wide_ulm_res(ligrec_factors)
 ligrec_factors_df <- ligrec_factors_df[order(apply(ligrec_factors_df,1,function(x){max(abs(x))}), decreasing = T)[1:25],]
 
 
 #plot them as heatmaps
-t <- as.vector(t(ligrec_factors_df))
-palette1 <- createLinearColors(t[t < 0],withZero = F , maximum = abs(min(t,na.rm = T)) * 10)
-palette2 <- createLinearColors(t[t > 0],withZero = F , maximum = abs(max(t,na.rm = T)) * 10)
-palette <- c(palette1, palette2)
+palette <- make_heatmap_color_palette(ligrec_factors_df)
 pheatmap(ligrec_factors_df, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315, filename = "results/mofa/mofa_top_ligrec.pdf", width = 4, height = 4.3)
 pheatmap(ligrec_factors_df, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315)
 ```
@@ -745,16 +724,11 @@ pheatmap(ligrec_factors_df, show_rownames = T, cluster_cols = F, cluster_rows = 
 ``` r
 # Calculate regulatory activities from TF network
 TF_factors <- run_ulm(mat = as.matrix(RNA_all), network = dorothea_df, minsize = 10)
-TF_factors <- reshape2::dcast(TF_factors, formula = source~condition, value.var = "score")
-row.names(TF_factors) <- TF_factors$source
-TF_factors <- TF_factors[,-1]
+TF_factors <- wide_ulm_res(TF_factors)
 TF_factors <- TF_factors[order(apply(TF_factors,1,function(x){max(abs(x))}), decreasing = T)[1:25],]
 
 #Plot them as heatmaps
-t <- as.vector(t(TF_factors))
-palette1 <- createLinearColors(t[t < 0],withZero = F , maximum = abs(min(t,na.rm = T)) * 10)
-palette2 <- createLinearColors(t[t > 0],withZero = F , maximum = abs(max(t,na.rm = T)) * 10)
-palette <- c(palette1, palette2)
+palette <- make_heatmap_color_palette(TF_factors)
 pheatmap(TF_factors, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315, filename = "results/mofa/mofa_top_TF.pdf", width = 4, height = 4.3)
 pheatmap(TF_factors, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315)
 ```
@@ -1627,8 +1601,6 @@ meta_network_compressed_list <- compress_same_children(meta_network_filtered, si
 
 meta_network_compressed <- meta_network_compressed_list$compressed_network
 
-
-
 meta_network_compressed <- meta_network_cleanup(meta_network_compressed)
 
 load(file = "support/dorothea_df.RData")
@@ -1650,6 +1622,7 @@ data("HMDB_mapper_vec")
 
 meta_network_rec_to_TFmetab <- meta_network_compressed
 
+#We run moon in a loop until TF-target coherence convergences
 before <- 1
 after <- 0
 i <- 1
@@ -1677,13 +1650,13 @@ while (before != after & i < 10) {
     ## [1] 4
     ## [1] 5
     ## [1] 6
-    ## Time difference of 0.2281651 secs
+    ## Time difference of 0.2323902 secs
     ## [1] 2
     ## [1] 3
     ## [1] 4
     ## [1] 5
     ## [1] 6
-    ## Time difference of 0.249064 secs
+    ## Time difference of 0.251807 secs
 
 ``` r
 if(i < 10)
@@ -1698,46 +1671,11 @@ if(i < 10)
     ## [1] "Converged after 2 iterations"
 
 ``` r
-node_signatures <- meta_network_compressed_list$node_signatures
-duplicated_parents <- meta_network_compressed_list$duplicated_signatures
-duplicated_parents_df <- data.frame(duplicated_parents)
-duplicated_parents_df$source_original <- row.names(duplicated_parents_df)
-names(duplicated_parents_df)[1] <- "source"
-
-addons <- data.frame(names(node_signatures)[-which(names(node_signatures) %in% duplicated_parents_df$source_original)]) 
-names(addons)[1] <- "source"
-addons$source_original <- addons$source
-
-final_leaves <- meta_network_rec_to_TFmetab[!(meta_network_rec_to_TFmetab$target %in% meta_network_rec_to_TFmetab$source),"target"]
-final_leaves <- as.data.frame(cbind(final_leaves,final_leaves))
-names(final_leaves) <- names(addons)
-
-addons <- as.data.frame(rbind(addons,final_leaves))
-
-mapping_table <- as.data.frame(rbind(duplicated_parents_df,addons))
-
-moon_res <- merge(moon_res, mapping_table, by = "source")
+moon_res <- decompress_moon_result(moon_res, meta_network_compressed_list, meta_network_rec_to_TFmetab)
 
 #save the whole res for later
 moon_res_rec_to_TFmet <- moon_res[,c(4,2,3)]
-moon_res_rec_to_TFmet[,1] <- sapply(moon_res_rec_to_TFmet[,1], function(x, HMDB_mapper_vec) {
-    x <- gsub("Metab__", "", x)
-    x <- gsub("^Gene", "Enzyme", x)
-    suffixe <- stringr::str_extract(x, "_[a-z]$")
-    x <- gsub("_[a-z]$", "", x)
-    if (x %in% names(HMDB_mapper_vec)) {
-      x <- HMDB_mapper_vec[x]
-      x <- paste("Metab__", x, sep = "")
-    }
-    if (!is.na(suffixe)) {
-      x <- paste(x, suffixe, sep = "")
-    }
-    return(x)
-  }, HMDB_mapper_vec = HMDB_mapper_vec)
-
-levels <- moon_res[,c(1,3)]
-
-
+moon_res_rec_to_TFmet[,1] <- translate_column_HMDB(moon_res_rec_to_TFmet[,1], HMDB_mapper_vec)
 
 levels <- moon_res[,c(4,3)]
 
@@ -1924,21 +1862,8 @@ if(i < 10)
     ## [1] "Converged after 1 iterations"
 
 ``` r
-moon_res_TF_lig <-moon_res
-moon_res_TF_lig[,1] <- sapply(moon_res_TF_lig[,1], function(x, HMDB_mapper_vec) {
-    x <- gsub("Metab__", "", x)
-    x <- gsub("^Gene", "Enzyme", x)
-    suffixe <- stringr::str_extract(x, "_[a-z]$")
-    x <- gsub("_[a-z]$", "", x)
-    if (x %in% names(HMDB_mapper_vec)) {
-      x <- HMDB_mapper_vec[x]
-      x <- paste("Metab__", x, sep = "")
-    }
-    if (!is.na(suffixe)) {
-      x <- paste(x, suffixe, sep = "")
-    }
-    return(x)
-  }, HMDB_mapper_vec = HMDB_mapper_vec)
+moon_res_TF_lig <- moon_res
+moon_res_TF_lig[,1] <- translate_column_HMDB(moon_res_TF_lig[,1], HMDB_mapper_vec)
 
 levels <- moon_res[,c(1,3)]
 
@@ -1993,8 +1918,8 @@ write_csv(ATT_TF_lig,file = "results/cosmos/moon/ATT_TF_lig.csv")
 ```
 
 Both networks (Receptos -\> TF and metabs; TF -\> Ligands) are merged
-together into a single compbined scored network. WE also add the
-conecitons between ligands and their corresponding receptors.
+together into a single compbined scored network. We also add the
+conections between ligands and their corresponding receptors.
 
 ``` r
 combined_SIF_moon <- as.data.frame(rbind(SIF_rec_to_TFmetab, SIF_TF_lig))
