@@ -12,3 +12,4 @@ notes.R
 results/cosmos/subnetwork/**
 cplex_macos/**
 cplex_win/**
+cplex_windows/cplex.exe
