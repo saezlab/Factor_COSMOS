@@ -20,3 +20,5 @@ Open the .rmd file you are interested in (ex: MOFA_to_COSMOS.rmd)
 Once the required packages are installed, and MOFA is set up with python, everything should run smoothly
 
 (If you wish to run the part of COSMOS that relied on CARNIVAL, you will need to install the cplex IBM solver too and set the path in the script)
+
+Please cite: https://www.embopress.org/doi/full/10.15252/msb.20209730
