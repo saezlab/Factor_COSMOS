@@ -791,87 +791,189 @@ rec_to_TF_cosmos_input <- list(upstream_inputs_filtered, downstream_inputs_filte
 save(rec_to_TF_cosmos_input, file = "data/cosmos/rec_to_TF_cosmos_input.Rdata")
 ```
 
-### MOON (meta footprint analysis) 
+At this point, we can perform the COSMOS analysis. Firstly, the options for the CARNIVAL run such as the time limit and min gap tolerance are set and the user must provide a path to its CPLEX executable. You can check the CARNIVAL_options variable to see all possible options that can be adjusted.
+This part is only display for reference purposes, but is optional. If you wish to run the latest verison of the analysis with your data,
+we advise to run instead the new MOON function, that can be found later in this tutorial.
 
-In this part, we will run the network scoring to generate mechanistic hypotheses 
-connecting ligands, receptors, TFs and metabolites, while pruning the 
-network with information from both RNA and protein abundance to constrain the 
-flux of signal consistent with the molecular data available.
+```{r Carnival options pre-run 1, warning=F}
+## Set CARNIVAL options to solve pre-optimization problem
+my_options <- default_CARNIVAL_options(solver = "cplex")
+my_options$solverPath <- "cplex_macos/cplex"
+my_options$solver <- "cplex"
+my_options$mipGAP <- 0.05
+my_options$threads <- 6
+my_options$timelimit <- 3200/6
+my_options$limitPop <- 100
 
-This method is easier to set up and interpret than the classic cosmos run that 
-relies on CPLEX and CARNIVAL.
-
-In this approach, the network is compressed to avoid having redundant paths in 
-the network leading to inflating the importance of some input measurements. 
-
-```{r Prepare moon input for receptor to TFs and metabs (MOON)}
-##filter expressed genes from PKN
-# data("meta_network")
-# save(meta_network, file = "support/meta_network.RData")
-load("support/meta_network.RData")
-
-meta_network <- meta_network_cleanup(meta_network)
-
-expressed_genes <- as.data.frame(read_csv("data/RNA/RNA_log2_FPKM_clean.csv"))
-expressed_genes <- setNames(rep(1,length(expressed_genes[,1])), expressed_genes$Genes)
-meta_network_filtered <- cosmosR:::filter_pkn_expressed_genes(names(expressed_genes), meta_pkn = meta_network)
-
-##format metab inputs
-metab_inputs <- as.numeric(scale(weights$metab[,4], center = F))
-names(metab_inputs) <- row.names(weights$metab)
-
-metab_to_HMDB <- as.data.frame(
-  read_csv("data/metabolomic/MetaboliteToHMDB.csv"))
-metab_to_HMDB <- metab_to_HMDB[metab_to_HMDB$common %in% names(metab_inputs),]
-metab_inputs <- metab_inputs[metab_to_HMDB$common]
-names(metab_inputs) <- metab_to_HMDB$HMDB
-
-metab_inputs <- cosmosR::prepare_metab_inputs(metab_inputs, compartment_codes = c("m","c"))
-
-#prepare upstream inputs
-upstream_inputs <- c(rec_inputs) #the upstream input should be filtered for most significant
-
-TF_inputs <- scale(ligrec_TF_moon_inputs$TF, center = F)
-TF_inputs <- setNames(TF_inputs[,1], row.names(TF_inputs))
-
-downstream_inputs <- c(metab_inputs, TF_inputs) #the downstream input should be complete
-
-upstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(upstream_inputs, meta_network_filtered)
-downstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(downstream_inputs, meta_network_filtered)
-
-#Filter inputs and prune the meta_network to only keep nodes that can be found downstream of the inputs
-#The number of step is quite flexible, 7 steps already covers most of the network
-
-n_steps <- 6
-
-# in this step we prune the network to keep only the relevant part between upstream and downstream nodes
-meta_network_filtered <- cosmosR:::keep_controllable_neighbours(meta_network_filtered
-                                                       , n_steps, 
-                                                       names(upstream_inputs_filtered))
-downstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(downstream_inputs_filtered, meta_network_filtered)
-meta_network_filtered <- cosmosR:::keep_observable_neighbours(meta_network_filtered, n_steps, names(downstream_inputs_filtered))
-upstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(upstream_inputs_filtered, meta_network_filtered)
-
-write_csv(meta_network_filtered, file = "results/cosmos/moon/meta_network_filtered.csv")
-
-#compress the network to avoid redundant master controllers
-meta_network_compressed_list <- compress_same_children(meta_network_filtered, sig_input = upstream_inputs_filtered, metab_input = downstream_inputs_filtered)
-
-meta_network_compressed <- meta_network_compressed_list$compressed_network
-
-meta_network_compressed <- meta_network_cleanup(meta_network_compressed)
-
-load(file = "support/dorothea_df.RData")
-
-RNA_input <- as.numeric(weights$RNA[,4])
-names(RNA_input) <- gsub("_RNA$","",row.names(weights$RNA))
+data("HMDB_mapper_vec")
 ```
 
-In this step, we format the MOFA weight and activity score information so that it can be appended to the moon network result afterward.
+Here, we are trying to find the "forward" network causally connecting the signaling data to metabolic data by using Carnival's ILP solution and the PKN. To further simplify the prior knowledge network (and perform checks on the input data), the pre-processing function of COSMOS is used. Details about the options can be found in the documentation as well as in the [COSMOS tutorial](https://saezlab.github.io/cosmosR/articles/tutorial.html).
+
+```{r COSMOS pre-run forward network 1, eval=FALSE}
+pre_run_rec_to_TF <- preprocess_COSMOS_signaling_to_metabolism(meta_network = meta_network,
+                                                               signaling_data = upstream_inputs_filtered,
+                                                               metabolic_data = downstream_inputs_filtered,
+                                                               diff_expression_data = RNA_input,
+                                                               maximum_network_depth = 5,
+                                                               remove_unexpressed_nodes = T,
+                                                               filter_tf_gene_interaction_by_optimization = F,
+                                                               CARNIVAL_options = my_options)
+```
+
+In this part, we can set up the options for the optimization run. The running time should be much higher here than in pre-optimization. You can increase the number of threads to use if you have many available CPUs.
+
+```{r Carnival options run 1}
+## Set CARNIVAL options to solve optimization problem
+my_options$mipGAP <- 0.05
+my_options$threads <- 6
+# my_options$timelimit <- 720
+# my_options$limitPop <- 100
+```
+
+After pre-optimization, we can perform the actual COSMOS run using the pre-optimized solution.
+
+```{r COSMOS run forward network 1, eval=FALSE}
+start_time <- Sys.time()
+run_rec_to_TF <- run_COSMOS_signaling_to_metabolism(data = pre_run_rec_to_TF,
+                                                    CARNIVAL_options = my_options)
+run_rec_to_TF <- cosmosR::format_COSMOS_res(run_rec_to_TF, metab_mapping = HMDB_mapper_vec)
+end_time <- Sys.time()
+end_time - start_time
+save(run_rec_to_TF, file = "results/cosmos/run_rec_to_TF.Rdata")
+```
+
+In order to analyze the gained sub-network, we first process the COSMOS result by extracting the list of interactions (nodes, sign, weight) in the simple interaction format (SIF) and by extracting a list of accompanying attributes (ATT). Here, we can also remove nodes with average activity of 0 as well as with weight of 0.
+
+```{r Processing COSMOS output 1}
+## COSMOS output evaluation
+load("results/cosmos/run_rec_to_TF.Rdata")
+
+SIF_rec_to_TF <- as.data.frame(run_rec_to_TF[[1]])
+SIF_rec_to_TF <- SIF_rec_to_TF[which(SIF_rec_to_TF$Weight != 0),]
+
+ATT_rec_to_TF <- as.data.frame(run_rec_to_TF[[2]])
+colnames(ATT_rec_to_TF)[1] <- "Nodes"
+ATT_rec_to_TF$measured <- ifelse(ATT_rec_to_TF$NodeType %in% c("M","T","S","P"),1,0)
+ATT_rec_to_TF$Activity <- ATT_rec_to_TF$AvgAct
+ATT_rec_to_TF <- ATT_rec_to_TF[ATT_rec_to_TF$AvgAct != 0,]
+
+res_mofa_rec_to_TF <- list(SIF_rec_to_TF,ATT_rec_to_TF)
+save(res_mofa_rec_to_TF, file = "results/cosmos/res_mofamoon_rec_to_TFmet.RData")
+write_csv(SIF_rec_to_TF, file = "results/cosmos/SIF_res_mofamoon_rec_to_TFmet.csv")
+write_csv(ATT_rec_to_TF, file = "results/cosmos/ATT_res_mofamoon_rec_to_TFmet.csv")
+```
+
+Since we are also interested to derive the forward network via the transcription factor/moon to ligand direction, this COSMOS analysis is additionally performed.
+
+We first assign the activities of the ligand-receptor interactions to the ligands and calculate the mean activity of the ligands in case of multiple entries.
+
+```{r Filtering}
+lig_inputs <- ligrec_input
+names(lig_inputs) <- gsub("___.+","",names(lig_inputs))
+lig_inputs <- tapply(lig_inputs, names(lig_inputs), mean)
+ligands <- names(lig_inputs)
+lig_inputs <- as.numeric(lig_inputs)
+names(lig_inputs) <- ligands
+```
+
+Then the datasets are merged appropriately, entries that are not included in the PKN are removed and the filtering steps are completed.
+
+```{r Combine inputs}
+upstream_inputs <- c(signaling_input)
+downstream_inputs <- c(lig_inputs) 
+
+dorothea_PKN <- dorothea_df[,c(1,3,2)]
+names(dorothea_PKN)[2] <- "interaction"
+
+upstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(upstream_inputs, dorothea_PKN)
+downstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(downstream_inputs, dorothea_PKN)
+
+TF_to_lig_cosmos_input <- list(upstream_inputs_filtered, downstream_inputs_filtered)
+save(TF_to_lig_cosmos_input, file = "data/cosmos/TF_to_lig_cosmos_input.Rdata")
+```
+
+```{r Carnival options pre-run 2}
+## Set CARNIVAL options to solve optimization problem
+my_options$mipGAP <- 0.05
+my_options$threads <- 6
+my_options$timelimit <- 360
+my_options$limitPop <- 100
+```
+
+After setting the variables for the CPLEX solver, we can perform the pre-optimization run ...
+
+```{r COSMOS pre-run forward network 2, eval=FALSE}
+pre_run_TF_to_lig <- preprocess_COSMOS_signaling_to_metabolism(meta_network = dorothea_PKN, 
+                                                               signaling_data = upstream_inputs_filtered,
+                                                               metabolic_data = downstream_inputs_filtered,
+                                                               diff_expression_data = RNA_input,
+                                                               maximum_network_depth = 1,
+                                                               remove_unexpressed_nodes = T,
+                                                               filter_tf_gene_interaction_by_optimization = T,
+                                                               CARNIVAL_options = my_options)
+```
+
+... set the options for the actual run ...
+
+```{r Carnival options run 2}
+## Set CARNIVAL options to solve optimization problem
+my_options$mipGAP <- 0.05
+my_options$threads <- 6
+my_options$timelimit <- 720
+my_options$limitPop <- 100
+```
+
+... and perform the optimization.
+
+```{r COSMOS run forward network 2, eval=FALSE}
+run_TF_to_lig <- run_COSMOS_signaling_to_metabolism(data = pre_run_TF_to_lig,
+                                                    CARNIVAL_options = my_options)
+
+run_TF_to_lig <- cosmosR::format_COSMOS_res(run_TF_to_lig, metab_mapping = HMDB_mapper_vec)
+save(run_TF_to_lig, file = "results/cosmos/run_TF_to_lig.Rdata")
+```
+
+Again, we extract the information from the determined network and filter out inactive nodes.
+
+```{r Processing COSMOS output 2}
+load("results/cosmos/run_TF_to_lig.Rdata")
+
+#remove interactions that are not part of solution network
+SIF_TF_to_lig <- as.data.frame(run_TF_to_lig[[1]])
+SIF_TF_to_lig <- SIF_TF_to_lig[which(SIF_TF_to_lig$Weight != 0),]
+
+#Keep the information about which node was an input data
+ATT_TF_to_lig <- as.data.frame(run_TF_to_lig[[2]])
+colnames(ATT_TF_to_lig)[1] <- "Nodes"
+ATT_TF_to_lig$measured <- ifelse(ATT_TF_to_lig$NodeType %in% c("M","T","S","P"),1,0)
+ATT_TF_to_lig$Activity <- ATT_TF_to_lig$AvgAct
+ATT_TF_to_lig <- ATT_TF_to_lig[ATT_TF_to_lig$AvgAct != 0,]
+
+#save the results
+res_mofa_TF_to_lig <- list(SIF_TF_to_lig,ATT_TF_to_lig)
+save(res_mofa_TF_to_lig, file = "results/cosmos/res_mofamoon_TF_to_lig.RData")
+write_csv(SIF_TF_to_lig, file = "results/cosmos/SIF_mofamoon_TF_to_lig.csv")
+write_csv(ATT_TF_to_lig, file = "results/cosmos/ATT_mofamoon_TF_to_lig.csv")
+```
+
+The next step connects both networks, resulting in a complete network of interactions between receptors, ligands, transcription factor regulators, transcription factors, and metabolites.
+
+After merging both inferred networks ATT file, we can identify whether the activity of the node is positive or negative and save the result under the variable sign_activity. Here, to avoid multiple mentions of one specific node, we can combine multiple mentions by calculating the mean.
+
+```{r Combine ATTs, warning=F}
+combined_ATT <- as.data.frame(rbind(ATT_rec_to_TF, ATT_TF_to_lig))
+combined_ATT$sign_activity <- sign(combined_ATT$AvgAct)
+
+combined_ATT$NodeType <- ifelse(combined_ATT$NodeType == "", 0, 1) #if NodeType is available, set to 1, else set to 0
+combined_ATT <- as.data.frame(combined_ATT %>% 
+  group_by(Nodes) %>%
+  summarise(across(.fns= ~ mean(.x, na.rm = TRUE))))
+```
+
+Further, we can also add the MOFA weight and activity score information to the list of attributes.
 
 ```{r Add activities and weights to network}
-data("HMDB_mapper_vec")
-
 ## MOFA weights
 MOFA_weights <- get_weights(model, factors = 4, as.data.frame = T)
 MOFA_weights <- MOFA_weights %>%
@@ -943,9 +1045,13 @@ TF_weights <- data.frame(Nodes = names(TF_weights), feature_weights = TF_weights
 
 ## Combine
 feature_weights <- as.data.frame(rbind(TF_weights, rec_weights, lig_weights))
+
+## Add weights to data
+combined_ATT <- merge(combined_ATT, MOFA_weights, all.x = T)
+combined_ATT <- merge(combined_ATT, feature_weights, all.x = T)
 ```
 
-To also identify whether a node is a ligand or receptor we also load the liana consensus LR ressource.
+To identify whether a node is a ligand, receptor or TFr, we first load the consensus PKNs and only keep entries which represent an interaction in our network.
 
 ```{r Load consensus}
 # LIANA
@@ -958,260 +1064,76 @@ ligrec_df$Node1 <- gsub("-","_",ligrec_df$Node1)
 ligrec_df$Node2 <- gsub("-","_",ligrec_df$Node2)
 ligrec_df$Sign <- 1
 ligrec_df$Weight <- 1
+
+ligrec_df <- ligrec_df[ligrec_df$Node1 %in% combined_ATT$Nodes & ligrec_df$Node2 %in% combined_ATT$Nodes, ]
+
+# Load Dorothea (TF) network
+load("support/dorothea_df.RData")
+dorothea_df <- dorothea_df[dorothea_df$source %in% combined_ATT$Nodes,]
 ```
 
-In this step. we run the first moon analysis, to connect receptors with 
-downstream TFs and ligands. MOON function is run iterativelly in a loop until
-the resulting scored network does not include edges incoherent with the RNA and proteomic data measurents.
-then, the network is decompressed, IDs are translated in a human-friendly format and a subnetowrk comparable to the classic cosmos 
-solution network is generated with the reduce_solution_network function.
+Then, we add the information to the network (ligand = 2, receptor = 3, transcription factor = 4, other = 1, no NodeType available = 0).
 
-```{r Run moon rec_to_TFmetab}
-data("HMDB_mapper_vec")
+```{r Set NodeType}
+combined_ATT$NodeType <- ifelse(combined_ATT$Nodes %in% ligrec_df$Node1, 2, ifelse(combined_ATT$Nodes %in% ligrec_df$Node2, 3, ifelse(combined_ATT$Nodes %in% dorothea_df$source, 4, combined_ATT$NodeType))) #if node is a ligand set NodeType to 2, if node is a receptor set NodeType to 3, if node is a TF set NodeType to 4, else keep 0 or 1
 
-meta_network_rec_to_TFmetab <- meta_network_compressed
+write_csv(combined_ATT, file = "results/cosmos/ATT_mofamoon_combined.csv")
+```
 
-#We run moon in a loop until TF-target coherence convergences
-before <- 1
-after <- 0
-i <- 1
-while (before != after & i < 10) {
-  before <- length(meta_network_rec_to_TFmetab[,1])
-  start_time <- Sys.time()
-  moon_res <- cosmosR::moon(upstream_input = upstream_inputs_filtered, 
-                                                 downstream_input = downstream_inputs_filtered, 
-                                                 meta_network = meta_network_rec_to_TFmetab, 
-                                                 n_layers = n_steps, 
-                                                 statistic = "ulm") 
+Finally, we merge both SIF together by summarizing multiple entries via mean calculation and add found interactions from the filtered LIANA consensus PKN.
+
+```{r Combine SIFs}
+combined_SIF <- as.data.frame(rbind(SIF_rec_to_TF, SIF_TF_to_lig))
+combined_SIF <- as.data.frame(combined_SIF %>%
+  group_by(Node1, Node2) %>%
+  summarise(across(.fns= ~ mean(.x, na.rm = TRUE))))
+
+combined_SIF <- as.data.frame(rbind(combined_SIF,ligrec_df))
+
+res_mofa_combined <- list(combined_SIF, combined_ATT)
+save(res_mofa_combined, file = "results/cosmos/res_mofamoon_combined.RData")
+write_csv(combined_SIF, file = "results/cosmos/SIF_mofamoon_combined.csv")
+```
+
+To filter the final network based on node properties, the strategy shown here can be used to find interesting ligand-receptor interactions. The final result is saved and later inspected ("Network visualization").
+
+```{r Filter network}
+ligands <- combined_ATT[combined_ATT$NodeType == 2,"Nodes"] # 2 for ligand
+receptors <- combined_ATT[combined_ATT$NodeType == 3,"Nodes"] # 3 for receptors
+
+combined_SIF_reduced <- combined_SIF[!(combined_SIF$Node2 %in% receptors & !(combined_SIF$Node2 %in% combined_SIF$Node1)),] #no node that is a receptor but not a source
+combined_SIF_reduced <- combined_SIF_reduced[!(combined_SIF_reduced$Node2 %in% ligands & !(combined_SIF_reduced$Node2 %in% combined_SIF_reduced$Node1)),] #no node that is a ligand but not a source
+combined_SIF_reduced <- combined_SIF_reduced[!(combined_SIF_reduced$Node1 %in% receptors & !(combined_SIF_reduced$Node1 %in% combined_SIF_reduced$Node2)),] #no node that is a receptor but not a regulated target
+combined_SIF_reduced <- combined_SIF_reduced[!(combined_SIF_reduced$Node1 %in% ligands & !(combined_SIF_reduced$Node1 %in% combined_SIF_reduced$Node2)),] #no node that is a ligand but not a regulated target 
+
+combined_ATT_reduced <- combined_ATT[combined_ATT$Nodes %in% combined_SIF_reduced$Node1 | combined_ATT$Nodes %in% combined_SIF_reduced$Node2,]
+
+res_mofa_combined_reduced <- list(combined_SIF_reduced, combined_ATT_reduced)
+save(res_mofa_combined_reduced, file = "results/cosmos/res_mofamoon_combined_reduced.RData")
+write_csv(combined_SIF_reduced, file = "results/cosmos/SIF_mofamoon_combined_reduced.csv")
+write_csv(combined_ATT_reduced, file = "results/cosmos/ATT_mofamoon_combined_reduced.csv")
+```
+
+Also the specific sub-network of a gene (e.g. MYC) can be extracted by taking into account n-step-distant nodes (here: 4 steps).
+
+```{r Extract sub-network, eval=FALSE}
+combined_SIF_reduced <- read_csv(file = "results/cosmos/SIF_mofamoon_combined_reduced.csv")
+combined_ATT_reduced <- read_csv(file = "results/cosmos/ATT_mofamoon_combined_reduced.csv")
+sig_prots <- combined_SIF_reduced[,c(1,4,2,3)]
+names(sig_prots) <- c("source","interaction","target","sign")
+background <- unique(c(sig_prots$source,sig_prots$target))
+
+subnetwork_per_gene <- list()
+
+for(node in background){
   
-  meta_network_rec_to_TFmetab <- filter_incohrent_TF_target(moon_res, dorothea_df, meta_network_rec_to_TFmetab, RNA_input)
-  end_time <- Sys.time()
+  SIF <- cosmosR:::keep_controllable_neighbours(sig_prots, n_steps = 4, input_nodes = node) #keeps the nodes in network that are no more then n_steps away from the starting nodes
+  ATT <- combined_ATT_reduced[combined_ATT_reduced$Nodes %in% SIF$source | combined_ATT_reduced$Nodes %in% SIF$target,] #keep supplementing information for nodes
   
-  print(end_time - start_time)
+  write_csv(ATT, file = paste0("results/cosmos/subnetwork/ATT_subnetwork_",node,".csv"))
+  write_csv(SIF, file = paste0("results/cosmos/subnetwork/SIF_subnetwork_",node,".csv"))
   
-  after <- length(meta_network_rec_to_TFmetab[,1])
-  i <- i + 1
+  subnetwork_per_gene[[node]] <- list("SIF" = SIF, "ATT" = ATT)
+  save(subnetwork_per_gene, file = "results/cosmos/subnetwork/subnetwork_per_gene.RData")
 }
-
-if(i < 10)
-{
-  print(paste("Converged after ",paste(i-1," iterations", sep = ""),sep = ""))
-} else
-{
-  print(paste("Interupted after ",paste(i," iterations. Convergence uncertain.", sep = ""),sep = ""))
-}
-
-moon_res <- decompress_moon_result(moon_res, meta_network_compressed_list, meta_network_rec_to_TFmetab)
-
-#save the whole res for later
-moon_res_rec_to_TFmet <- moon_res[,c(4,2,3)]
-moon_res_rec_to_TFmet[,1] <- translate_column_HMDB(moon_res_rec_to_TFmet[,1], HMDB_mapper_vec)
-
-levels <- moon_res[,c(4,3)]
-
-moon_res <- moon_res[,c(4,2)]
-names(moon_res)[1] <- "source"
-
-plot(density(moon_res$score))
-abline(v = 1)
-abline(v = -1)
-
-solution_network <- reduce_solution_network(decoupleRnival_res = moon_res, 
-                                            meta_network = meta_network_filtered,
-                                            cutoff = 1.5, 
-                                            upstream_input = upstream_inputs_filtered, 
-                                            RNA_input = RNA_input, 
-                                            n_steps = n_steps)
-
-SIF_rec_to_TFmetab <- solution_network$SIF
-names(SIF_rec_to_TFmetab)[3] <- "sign"
-ATT_rec_to_TFmetab <- solution_network$ATT
-
-translated_res <- translate_res(SIF_rec_to_TFmetab,ATT_rec_to_TFmetab,HMDB_mapper_vec)
-
-levels_translated <- translate_res(SIF_rec_to_TFmetab,levels,HMDB_mapper_vec)[[2]]
-
-SIF_rec_to_TFmetab <- translated_res[[1]]
-ATT_rec_to_TFmetab <- translated_res[[2]]
-
-## Add weights to data
-ATT_rec_to_TFmetab <- merge(ATT_rec_to_TFmetab, MOFA_weights, all.x = T)
-ATT_rec_to_TFmetab <- merge(ATT_rec_to_TFmetab, feature_weights, all.x = T)
-names(ATT_rec_to_TFmetab)[2] <- "AvgAct"
-
-ATT_rec_to_TFmetab$NodeType <- ifelse(ATT_rec_to_TFmetab$Nodes %in% levels_translated[levels_translated$level == 0,1],1,0)
-
-ATT_rec_to_TFmetab$NodeType <- ifelse(ATT_rec_to_TFmetab$Nodes %in% ligrec_df$Node1, 2, ifelse(ATT_rec_to_TFmetab$Nodes %in% ligrec_df$Node2, 3, ifelse(ATT_rec_to_TFmetab$Nodes %in% dorothea_df$source, 4, ATT_rec_to_TFmetab$NodeType))) 
-
-names(SIF_rec_to_TFmetab)[4] <- "Weight"
-
-write_csv(SIF_rec_to_TFmetab,file = "results/cosmos/moon/SIF_rec_TFmetab.csv")
-write_csv(ATT_rec_to_TFmetab,file = "results/cosmos/moon/ATT_rec_TFmetab.csv")
-```
-Next, we also score a network connecting the TF with downstream ligands. 
-The procedure is the same as the previous section, only the upstream and 
-downstream input definition is changing.
-```{r Prepare moon input for TFs to ligands}
-##filter expressed genes from PKN
-dorothea_PKN <- dorothea_df[,c(1,3,2)]
-names(dorothea_PKN)[2] <- "interaction"
-
-expressed_genes <- as.data.frame(read_csv("data/RNA/RNA_log2_FPKM_clean.csv"))
-expressed_genes <- setNames(rep(1,length(expressed_genes[,1])), expressed_genes$Genes)
-dorothea_PKN_filtered <- cosmosR:::filter_pkn_expressed_genes(names(expressed_genes), meta_pkn = dorothea_PKN)
-
-
-#prepare upstream inputs
-
-#the upstream input should be filtered for most significant
-upstream_inputs <- setNames(TF_weights$feature_weights, TF_weights$Nodes)
-upstream_inputs <- upstream_inputs[abs(upstream_inputs) > 2]
-
-lig_inputs <- ligrec_TF_moon_inputs$ligrec
-names(lig_inputs) <- gsub("___.+","",names(lig_inputs))
-lig_inputs <- tapply(lig_inputs, names(lig_inputs), mean)
-ligands <- names(lig_inputs)
-lig_inputs <- as.numeric(lig_inputs)
-names(lig_inputs) <- ligands
-
-lig_inputs <- scale(lig_inputs, center = F)
-lig_inputs <- setNames(lig_inputs[,1], row.names(lig_inputs))
-
-downstream_inputs <- lig_inputs #the downstream input should be complete
-
-upstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(upstream_inputs, dorothea_PKN_filtered)
-downstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(downstream_inputs, dorothea_PKN_filtered)
-
-#Filter inputs and prune the meta_network to only keep nodes that can be found downstream of the inputs
-#The number of step is quite flexible, 7 steps already covers most of the network
-
-n_steps <- 1
-
-# in this step we prune the network to keep only the relevant part between upstream and downstream nodes
-dorothea_PKN_filtered <- cosmosR:::keep_controllable_neighbours(dorothea_PKN_filtered
-                                                       , n_steps, 
-                                                       names(upstream_inputs_filtered))
-downstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(downstream_inputs_filtered, dorothea_PKN_filtered)
-dorothea_PKN_filtered <- cosmosR:::keep_observable_neighbours(dorothea_PKN_filtered, n_steps, names(downstream_inputs_filtered))
-upstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(upstream_inputs_filtered, dorothea_PKN_filtered)
-
-#compress the network to avoid redundant master controllers
-load(file = "support/dorothea_df.RData")
-
-RNA_input <- as.numeric(weights$RNA[,4])
-names(RNA_input) <- gsub("_RNA$","",row.names(weights$RNA))
-```
-
-```{r run moon TF to lig}
-meta_network_TF_lig <- dorothea_PKN_filtered
-
-write_csv(meta_network_TF_lig, file = "results/cosmos/moon/meta_network_TF_lig.csv")
-
-before <- 1
-after <- 0
-i <- 1
-while (before != after & i < 10) {
-  before <- length(meta_network_TF_lig[,1])
-  moon_res <- cosmosR::moon(upstream_input = upstream_inputs_filtered, 
-                                                 downstream_input = downstream_inputs_filtered, 
-                                                 meta_network = meta_network_TF_lig, 
-                                                 n_layers = n_steps, 
-                                                 statistic = "ulm") 
-  
-  meta_network_TF_lig <- filter_incohrent_TF_target(moon_res, dorothea_df, meta_network_TF_lig, RNA_input)
-  after <- length(meta_network_TF_lig[,1])
-  i <- i + 1
-}
-
-if(i < 10)
-{
-  print(paste("Converged after ",paste(i-1," iterations", sep = ""),sep = ""))
-} else
-{
-  print(paste("Interupted after ",paste(i," iterations. Convergence uncertain.", sep = ""),sep = ""))
-}
-
-moon_res_TF_lig <- moon_res
-moon_res_TF_lig[,1] <- translate_column_HMDB(moon_res_TF_lig[,1], HMDB_mapper_vec)
-
-levels <- moon_res[,c(1,3)]
-
-moon_res <- moon_res[,c(1,2)]
-names(moon_res)[1] <- "source"
-
-plot(density(moon_res$score))
-abline(v = 1)
-abline(v = -1)
-
-solution_network <- reduce_solution_network(decoupleRnival_res = moon_res, 
-                                            meta_network = as.data.frame(dorothea_PKN_filtered[,c(1,3,2)]),
-                                            cutoff = 1.5, 
-                                            upstream_input = upstream_inputs_filtered, 
-                                            RNA_input = RNA_input, 
-                                            n_steps = n_steps)
-
-SIF_TF_lig <- solution_network$SIF
-names(SIF_TF_lig)[3] <- "sign"
-ATT_TF_lig <- solution_network$ATT
-
-
-translated_res <- translate_res(SIF_TF_lig,ATT_TF_lig,HMDB_mapper_vec)
-
-levels_translated <- translate_res(SIF_TF_lig,levels,HMDB_mapper_vec)[[2]]
-
-SIF_TF_lig <- translated_res[[1]]
-ATT_TF_lig <- translated_res[[2]]
-
-## Add weights to data
-ATT_TF_lig <- merge(ATT_TF_lig, MOFA_weights, all.x = T)
-ATT_TF_lig <- merge(ATT_TF_lig, feature_weights, all.x = T)
-names(ATT_TF_lig)[2] <- "AvgAct"
-
-ATT_TF_lig$NodeType <- ifelse(ATT_TF_lig$Nodes %in% levels_translated[levels_translated$level == 0,1],1,0)
-
-ATT_TF_lig$NodeType <- ifelse(ATT_TF_lig$Nodes %in% ligrec_df$Node1, 2, ifelse(ATT_TF_lig$Nodes %in% ligrec_df$Node2, 3, ifelse(ATT_TF_lig$Nodes %in% dorothea_df$source, 4, ATT_TF_lig$NodeType))) 
-
-names(SIF_TF_lig)[4] <- "Weight"
-
-write_csv(SIF_TF_lig,file = "results/cosmos/moon/SIF_TF_lig.csv")
-write_csv(ATT_TF_lig,file = "results/cosmos/moon/ATT_TF_lig.csv")
-```
-Both networks (Receptos -> TF and metabs; TF -> Ligands) are merged together 
-into a single compbined scored network. We also add the conections between 
-ligands and their corresponding receptors.
-```{r combine moon networks}
-combined_SIF_moon <- as.data.frame(rbind(SIF_rec_to_TFmetab, SIF_TF_lig))
-combined_SIF_moon <- unique(combined_SIF_moon)
-
-combined_ATT_moon <- as.data.frame(rbind(ATT_rec_to_TFmetab, ATT_TF_lig))
-combined_ATT_moon <- combined_ATT_moon %>% group_by(Nodes) %>% summarise_each(funs(mean(., na.rm = TRUE)))
-combined_ATT_moon <- as.data.frame(combined_ATT_moon)
-
-ligrec_ressource_addon <- ligrec_ressource[
-  ligrec_ressource$source_genesymbol %in% combined_SIF_moon$target &
-    ligrec_ressource$target_genesymbol %in% combined_SIF_moon$source
-, c(10,12)]
-ligrec_ressource_addon$sign <- 1
-ligrec_ressource_addon$Weight <- 1
-names(ligrec_ressource_addon)[c(1,2)] <- c("source","target")
-ligrec_ressource_addon <- unique(ligrec_ressource_addon)
-
-combined_SIF_moon <- as.data.frame(rbind(combined_SIF_moon, ligrec_ressource_addon))
-
-#It appears I may need to only consider direct TF regulations for TF to lig
-
-write_csv(combined_SIF_moon,file = "results/cosmos/moon/combined_SIF_moon.csv")
-write_csv(combined_ATT_moon,file = "results/cosmos/moon/combined_ATT_moon.csv")
-
-write_csv(moon_res_rec_to_TFmet, file = "results/cosmos/moon/moon_res_rec_to_TFmet.csv")
-write_csv(moon_res_TF_lig, file = "results/cosmos/moon/moon_res_TF_lig.csv")
-```
-### Further analyses
-
-Further MOFA-COSMOS downstream analyses focusing on analyzing network control structures and cell line specific MOFA transcriptomics are given in ./pathway_control_analysis_moon.Rmd and ./Cell_line_MOFA_space.Rmd
-
-### Session info
-
-```{r Session info}
-sessionInfo()
 ```
