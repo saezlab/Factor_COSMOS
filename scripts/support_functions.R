@@ -54,6 +54,7 @@ decompress_moon_result <- function(moon_res, meta_network_compressed_list, meta_
   # Create mapping table by combining duplicated parents and addons
   mapping_table <- as.data.frame(rbind(duplicated_parents_df,addons))
   
+  mapping_table <- unique(mapping_table)
   # Merge the moon_res data frame with the mapping table
   moon_res <- merge(moon_res, mapping_table, by = "source")
   

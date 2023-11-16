@@ -25,12 +25,14 @@ library(ggplot2)
 library(RCy3)
 library(RColorBrewer)
 library(cosmosR)
+library(data.table)
+library(cosmosR)
 
 source("scripts/support_pheatmap_colors.R")
+source("scripts/support_functions.R")
 ```
 
 ```{r}
-cell_line <- "MOLT-4"
 ## Get RNA raw values
 RNA_raw <- as.data.frame(read_csv("data/RNA/RNA_log2_FPKM_clean.csv"))
 rownames(RNA_raw) <- RNA_raw[,1]
@@ -39,6 +41,10 @@ RNA_raw <- melt(as.data.frame(cbind(RNA_raw,row.names(RNA_raw))))
 RNA_raw$view <- "RNA"
 RNA_raw <- RNA_raw[,c(2,1,4,3)]                 
 names(RNA_raw) <- c("sample","feature","view","value")
+
+cell_lines <- unique(RNA_raw$sample)
+cell_line <- "MOLT-4"
+
 RNA_raw <- RNA_raw[which(RNA_raw$sample == cell_line),]
 
 model <- load_model('results/mofa/mofa_res_10factor.hdf5')
@@ -92,26 +98,29 @@ load("support/dorothea_df.RData")
 ```
 
 ```{r}
+scaling_factor_Z <- as.numeric(Factor_MOFA[cell_line,-1])
 ligrec_scores <- run_ulm(mat = as.matrix(cell_line_decomposed_RNA), network = ligrec_geneset, .source = set, .target = gene, minsize = 2)
 ligrec_scores_df <- reshape2::dcast(ligrec_scores,source~condition, value.var = "score")
 row.names(ligrec_scores_df) <- ligrec_scores_df$source
 ligrec_scores_df <- ligrec_scores_df[,-1]
+ligrec_scores_df <- as.data.frame(t(apply(ligrec_scores_df, 1, function(x, scaling_factor_Z){
+  return(x * scaling_factor_Z)
+}, scaling_factor_Z = scaling_factor_Z)))
 
 TF_scores <- run_ulm(mat = as.matrix(cell_line_decomposed_RNA), network = dorothea_df, minsize = 10)
 TF_scores_df <- reshape2::dcast(TF_scores,source~condition, value.var = "score")
 row.names(TF_scores_df) <- TF_scores_df$source
 TF_scores_df <- TF_scores_df[,-1]
-```
-
-```{r}
-
+TF_scores_df <- as.data.frame(t(apply(TF_scores_df, 1, function(x, scaling_factor_Z){
+  return(x * scaling_factor_Z)
+}, scaling_factor_Z = scaling_factor_Z)))
 ```
 
 ```{r, fig.height=5, fig.width=3.5}
 # ligrec_scores_df_top <- ligrec_scores_df[c("TIMP2___ITGB1","VIM___CD44"),]
-ligrec_scores_df_top <- ligrec_scores_df[apply(ligrec_scores_df,1,function(x){max(abs(x)) > 4}),]
+ligrec_scores_df_top <- ligrec_scores_df[apply(ligrec_scores_df,1,function(x){max(abs(x)) > 9}),]
 
-TF_scores_df_top <- TF_scores_df[apply(TF_scores_df,1,function(x){max(abs(x)) > 4.5}),]
+TF_scores_df_top <- TF_scores_df[apply(TF_scores_df,1,function(x){max(abs(x)) > 10.5}),]
 
 top_score_df <- as.data.frame(rbind(ligrec_scores_df_top, TF_scores_df_top))
 
@@ -125,13 +134,209 @@ pheatmap(top_score_df, show_rownames = T, cluster_cols = T, cluster_rows = T,col
 ```
 
 ```{r}
+factor_n <- 4
 
+Z_matrix <- data.frame(get_factors(model, factors = "all")$single_group)
+Factor_MOFA <- cbind(rownames(Z_matrix), Z_matrix)
+colnames(Factor_MOFA)[1] <- c("sample")
+
+RNA_raw <- as.data.frame(read_csv("data/RNA/RNA_log2_FPKM_clean.csv"))
+rownames(RNA_raw) <- RNA_raw[,1]
+RNA_raw <- RNA_raw[,-1]
+RNA_raw <- melt(as.data.frame(cbind(RNA_raw,row.names(RNA_raw))))
+RNA_raw$view <- "RNA"
+RNA_raw <- RNA_raw[,c(2,1,4,3)]                 
+names(RNA_raw) <- c("sample","feature","view","value")
+
+factor_reconstructed_RNA <- sapply(as.character(cell_lines), function(cell_line, Factor_MOFA,RNA_raw, RNA_MOFA, factor_n){
+  Factor_MOFA_cl <- Factor_MOFA[which(Factor_MOFA$sample == cell_line),]
+  names(Factor_MOFA_cl) <- gsub("Factor","Factor_Z_",names(Factor_MOFA_cl))
+  
+  RNA_raw_cl <- RNA_raw[which(RNA_raw$sample == cell_line),]
+  
+  RNA_weight_cell_line <- merge(RNA_raw_cl, RNA_MOFA, by.x='feature', by.y='feature')
+  names(RNA_weight_cell_line) <- gsub("Factor","Factor_W_", names(RNA_weight_cell_line))
+  RNA_weight_cell_line <- merge(RNA_weight_cell_line, Factor_MOFA_cl, by.x='sample', by.y='sample')
+  
+  reconstructed_RNA <- RNA_weight_cell_line[,factor_n+4] * RNA_weight_cell_line[,factor_n+4+9]
+  names(reconstructed_RNA) <- RNA_weight_cell_line$feature
+  return(reconstructed_RNA)
+}, Factor_MOFA = Factor_MOFA, RNA_raw = RNA_raw, RNA_MOFA = RNA_MOFA, factor_n = factor_n)
+
+factor_reconstructed_RNA_df <- as.data.frame(do.call(cbind,factor_reconstructed_RNA))
+row.names(factor_reconstructed_RNA_df) <- names(factor_reconstructed_RNA[[1]])
+```
+
+```{r, fig.width = 12, fig.height = 5}
+# factor_reconstructed_TF <- as.data.frame(run_wmean(factor_reconstructed_RNA_df, network = dorothea_df, times = 2, minsize = 10))
+# factor_reconstructed_TF <- factor_reconstructed_TF[factor_reconstructed_TF$statistic == "wmean",]
+factor_reconstructed_TF <- as.data.frame(run_ulm(factor_reconstructed_RNA_df, network = dorothea_df, minsize = 10))
+factor_reconstructed_TF_df <- reshape2::dcast(factor_reconstructed_TF,source~condition, value.var = "score")
+row.names(factor_reconstructed_TF_df) <- factor_reconstructed_TF_df$source
+factor_reconstructed_TF_df <- factor_reconstructed_TF_df[,-1]
+
+Factor_Z <- Factor_MOFA[,1+factor_n]
+names(Factor_Z) <- Factor_MOFA[,1]
+
+Factor_Z <- Factor_Z[names(factor_reconstructed_TF_df)]
+
+factor_reconstructed_TF_df_scaledZ <- as.data.frame(t(apply(factor_reconstructed_TF_df, 1, function(x, Factor_Z){
+  return(x * Factor_Z)
+}, Factor_Z = Factor_Z)))
+
+factor_reconstructed_TF_df_scaledZ_top <- factor_reconstructed_TF_df_scaledZ[order(abs(factor_reconstructed_TF_df_scaledZ$`MOLT-4`), decreasing = T),]
+factor_reconstructed_TF_df_scaledZ_top <- factor_reconstructed_TF_df_scaledZ_top[1:20,]
+
+palette <- make_heatmap_color_palette(factor_reconstructed_TF_df_scaledZ_top)
+pheatmap(factor_reconstructed_TF_df_scaledZ_top, show_rownames = T,color = palette, angle_col = 315)
+```
+
+```{r, fig.width = 12, fig.height = 5}
+# factor_reconstructed_TF <- as.data.frame(run_wmean(factor_reconstructed_RNA_df, network = dorothea_df, times = 2, minsize = 10))
+# factor_reconstructed_TF <- factor_reconstructed_TF[factor_reconstructed_TF$statistic == "wmean",]
+factor_reconstructed_LR <- as.data.frame(run_ulm(factor_reconstructed_RNA_df, network = ligrec_geneset, .source = set, .target = gene, minsize = 2))
+factor_reconstructed_LR_df <- reshape2::dcast(factor_reconstructed_LR,source~condition, value.var = "score")
+row.names(factor_reconstructed_LR_df) <- factor_reconstructed_LR_df$source
+factor_reconstructed_LR_df <- factor_reconstructed_LR_df[,-1]
+
+Factor_Z <- Factor_MOFA[,1+factor_n]
+names(Factor_Z) <- Factor_MOFA[,1]
+
+Factor_Z <- Factor_Z[names(factor_reconstructed_LR_df)]
+
+factor_reconstructed_LR_df_scaledZ <- as.data.frame(t(apply(factor_reconstructed_LR_df, 1, function(x, Factor_Z){
+  return(x * Factor_Z)
+}, Factor_Z = Factor_Z)))
+
+factor_reconstructed_LR_df_scaledZ_top <- factor_reconstructed_LR_df_scaledZ[order(abs(factor_reconstructed_LR_df_scaledZ$`MOLT-4`), decreasing = T),]
+factor_reconstructed_LR_df_scaledZ_top <- factor_reconstructed_LR_df_scaledZ_top[1:20,]
+
+palette <- make_heatmap_color_palette(factor_reconstructed_LR_df_scaledZ_top)
+pheatmap(factor_reconstructed_LR_df_scaledZ_top, show_rownames = T,color = palette, angle_col = 315)
 ```
 
 ```{r}
+load("support/meta_network.RData")
+
+meta_network <- meta_network_cleanup(meta_network)
+expressed_genes <- as.data.frame(read_csv("data/RNA/RNA_log2_FPKM_clean.csv"))
+expressed_genes <- setNames(rep(1,length(expressed_genes[,1])), expressed_genes$Genes)
+meta_network_filtered <- cosmosR:::filter_pkn_expressed_genes(names(expressed_genes), meta_pkn = meta_network)
 
 ```
 
-```{r}
 
+
+```{r}
+cell_lines <- names(factor_reconstructed_LR_df_scaledZ)
+moon_res_rec_to_TF_factor_reconstructed <- sapply(as.character(cell_lines), FUN = function(cell_line,
+                                                                       factor_reconstructed_LR_df_scaledZ, 
+                                                                       factor_reconstructed_TF_df_scaledZ, 
+                                                                       factor_reconstructed_RNA_df, 
+                                                                       meta_network_filtered){
+  receptor_scores <- factor_reconstructed_LR_df_scaledZ[,cell_line,drop = F]
+  receptor_scores$receptor <- gsub(".*___","",row.names(receptor_scores))
+  receptor_scores <- as.data.table(receptor_scores)
+  
+  receptor_scores <- as.data.frame(receptor_scores[, lapply(.SD, mean), by = .(receptor), .SDcols = colnames(receptor_scores)[!colnames(receptor_scores) %in% 'receptor']])
+  receptor_scores <- setNames(receptor_scores[,2], receptor_scores$receptor)
+  
+  TF_scores <- factor_reconstructed_TF_df_scaledZ[,cell_line]
+  names(TF_scores) <- row.names(factor_reconstructed_TF_df_scaledZ)
+  
+  upstream_inputs <- receptor_scores
+  upstream_inputs <- upstream_inputs[order(abs(upstream_inputs), decreasing = T)]
+  upstream_inputs <- upstream_inputs[1:20]
+  downstream_inputs <- TF_scores
+  
+  RNA_input <- factor_reconstructed_RNA_df[,cell_line] * Factor_Z[cell_line]
+  names(RNA_input) <- row.names(factor_reconstructed_RNA_df)
+  
+  n_steps <- 6
+  
+  upstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(upstream_inputs, meta_network_filtered)
+  downstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(downstream_inputs, meta_network_filtered)
+  
+  # in this step we prune the network to keep only the relevant part between upstream and downstream nodes
+  meta_network_filtered_cellline <- cosmosR:::keep_controllable_neighbours(meta_network_filtered
+                                                         , n_steps, 
+                                                         names(upstream_inputs_filtered))
+  downstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(downstream_inputs_filtered, meta_network_filtered_cellline)
+  meta_network_filtered <- cosmosR:::keep_observable_neighbours(meta_network_filtered_cellline, n_steps, names(downstream_inputs_filtered))
+  upstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(upstream_inputs_filtered, meta_network_filtered_cellline)
+  
+  meta_network_filtered_cellline_list <- compress_same_children(meta_network_filtered_cellline, sig_input = upstream_inputs_filtered, metab_input = downstream_inputs_filtered)
+  
+  meta_network_compressed_cellline <- meta_network_filtered_cellline_list$compressed_network
+  
+  meta_network_compressed_cellline <- meta_network_cleanup(meta_network_compressed_cellline)
+  
+  meta_network_rec_to_TF <- meta_network_compressed_cellline
+
+  #We run moon in a loop until TF-target coherence convergences
+  before <- 1
+  after <- 0
+  i <- 1
+  while (before != after & i < 10) {
+    before <- length(meta_network_rec_to_TF[,1])
+    moon_res <- cosmosR::moon(upstream_input = upstream_inputs_filtered, 
+                                                   downstream_input = downstream_inputs_filtered, 
+                                                   meta_network = meta_network_rec_to_TF, 
+                                                   n_layers = n_steps, 
+                                                   statistic = "ulm") 
+    
+    meta_network_rec_to_TF <- filter_incohrent_TF_target(moon_res, dorothea_df, meta_network_rec_to_TF, RNA_input)
+  
+    
+    after <- length(meta_network_rec_to_TF[,1])
+    i <- i + 1
+  }
+  
+  moon_res <- decompress_moon_result(moon_res, meta_network_filtered_cellline_list, meta_network_rec_to_TF)
+  
+  moon_res[moon_res$level != 0,"score"] <- moon_res[moon_res$level != 0,"score"] * Factor_Z[cell_line]
+  moon_res <-  moon_res[,c(4,2)]
+  names(moon_res)[2] <- cell_line
+
+  return(moon_res)
+  
+}, USE.NAMES = T, 
+simplify = F, 
+factor_reconstructed_LR_df_scaledZ = factor_reconstructed_LR_df_scaledZ, 
+factor_reconstructed_TF_df_scaledZ = factor_reconstructed_TF_df_scaledZ, 
+factor_reconstructed_RNA_df = factor_reconstructed_RNA_df,
+meta_network_filtered = meta_network_filtered)
+
+moon_res_rec_to_TF_factor_reconstructed_df <- merge(moon_res_rec_to_TF_factor_reconstructed[[1]],moon_res_rec_to_TF_factor_reconstructed[[2]])
+for(i in 3:length(moon_res_rec_to_TF_factor_reconstructed))
+{
+  print(i)
+  moon_res_rec_to_TF_factor_reconstructed_df <- merge(moon_res_rec_to_TF_factor_reconstructed_df, moon_res_rec_to_TF_factor_reconstructed[[i]])
+}
+
+row.names(moon_res_rec_to_TF_factor_reconstructed_df) <- moon_res_rec_to_TF_factor_reconstructed_df[,1]
+moon_res_rec_to_TF_factor_reconstructed_df <- moon_res_rec_to_TF_factor_reconstructed_df[,-1]
+
+```
+
+
+```{r, fig.width = 12, fig.height = 5}
+palette <- make_heatmap_color_palette(moon_res_rec_to_TF_factor_reconstructed_df)
+pheatmap(moon_res_rec_to_TF_factor_reconstructed_df, show_rownames = F,color = palette, angle_col = 315)
+```
+
+```{r, fig.width = 12, fig.height = 5.5}
+moon_res_rec_to_TF_factor_reconstructed_df_top <- moon_res_rec_to_TF_factor_reconstructed_df[order(abs(moon_res_rec_to_TF_factor_reconstructed_df[,1]), decreasing = T),]
+moon_res_rec_to_TF_factor_reconstructed_df_top <- moon_res_rec_to_TF_factor_reconstructed_df_top[c(1:20),]
+
+palette <- make_heatmap_color_palette(moon_res_rec_to_TF_factor_reconstructed_df_top)
+pheatmap(moon_res_rec_to_TF_factor_reconstructed_df_top, show_rownames = T,color = palette, angle_col = 315)
+pheatmap(moon_res_rec_to_TF_factor_reconstructed_df_top, show_rownames = T,color = palette, angle_col = 315, filename = "results/cosmos/moon/factor4_moon_scores.pdf", height = 3.75, width = 12, treeheight_row = 0, treeheight_col = 0)
+
+```
+
+
+```{r}
+Z_matrix <- t(get_factors(model, factors = "all")$single_group)
+W_matrix <-get_weights(model, factors = "all")$RNA
 ```
