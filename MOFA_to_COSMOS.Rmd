@@ -15,30 +15,33 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ### Installation and dependency
 
-In this tutorial, we use the new Meta-Footprint Analysis MOON to score a mechanistic network. However, the legacy network optimisation of COSMOS was done through CARNIVAL, which requires the interactive version of IBM Cplex or CBC-COIN solver as the network optimizer. Thus, the classic cosmos run using the CARNIVAL back end is still presnet in this tutorial as a comparison reference, but is optional. IF you wish to reproduce it, The IBM ILOG Cplex is freely available through Academic Initiative [here](https://community.ibm.com/community/user/datascience/blogs/xavier-nodet1/2020/07/09/cplex-free-for-students). As an alternative, the CBC solver is open source and freely available for any user, but has a significantly lower performance than CPLEX. The CBC executable can be find under cbc/. Alternatively for small networks, users can rely on the freely available lpSolve R-package, which is automatically installed with the package.
-
-In this tutorial we use *CPLEX* for means of comparison with the newer MOON function that doesn't rely on optimisation.
+In this tutorial, we use the new Meta-Footprint Analysis MOON to score a mechanistic network. 
 
 ```{r COSMOS installation, message=FALSE}
-# Install cosmosR from bioconductor (stable version)
-#if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
-#BiocManager::install("cosmosR")
-
-# Or install cosmosR from github directly to obtain the newest version
+#install cosmosR from github directly to obtain the newest version
 if (!requireNamespace("devtools", quietly = TRUE)) install.packages("devtools")
 if (!requireNamespace("cosmosR", quietly = TRUE)) devtools::install_github("saezlab/cosmosR")
 ```
 
+DecoupleR is used to score various regulatory interactions.
 ```{r decoupleR installation}
 if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
 if (!requireNamespace("decoupleR", quietly = TRUE)) BiocManager::install("saezlab/decoupleR")
 ```
+
+We are using the LIANA package to process the LR interactions.
 ```{r LIANA installation}
 if (!requireNamespace("remotes", quietly = TRUE)) install.packages("remotes")
 if (!requireNamespace("liana", quietly = TRUE)) remotes::install_github('saezlab/liana')
 ```
 
-We are using MOFA2 (Argelaguet et al., 2018) to find decompose variance across different omics and use COSMOS to find mechanistic interpretations of its factors. However, since we are using the python version of MOFA2, please make sure to have [mofapy2](https://github.com/bioFAM/mofapy2) as well as panda and numpy installed in your (conda) environment (e.g. by using reticulate: reticulate::use_condaenv("base", required = T) %\>% reticulate::conda_install(c("mofapy2","panda","numpy")). For downstream analysis, the R version of MOFA2 is used.
+We are using MOFA2 (Argelaguet et al., 2018) to find decompose variance across 
+different omics and use COSMOS to find mechanistic interpretations of its 
+factors. However, since we are using the python version of MOFA2, please make 
+sure to have [mofapy2](https://github.com/bioFAM/mofapy2) as well as panda and 
+numpy installed in your (conda) environment 
+(e.g. by using reticulate: reticulate::use_condaenv("base", required = T) %\>% reticulate::conda_install(c("mofapy2","panda","numpy")). 
+For downstream analysis, the R version of MOFA2 is used.
 
 ```{r MOFA2 installation, message=FALSE}
 # Install MOFA2 from bioconductor (stable version)
@@ -46,36 +49,60 @@ if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocMana
 if (!requireNamespace("MOFA2", quietly = TRUE)) BiocManager::install("MOFA2")
 ```
 
-General information (tutorials) on how to use COSMOS and MOFA2, see [COSMOS](https://saezlab.github.io/cosmosR/articles/tutorial.html) and [MOFA2](https://biofam.github.io/MOFA2/tutorials.html).
+General information (tutorials) on how to use COSMOS and MOFA2, 
+see [COSMOS](https://saezlab.github.io/cosmosR/articles/tutorial.html) 
+and [MOFA2](https://biofam.github.io/MOFA2/tutorials.html).
 
-For data manipulation, visualization, etc. further packages are needed which are loaded here along with MOFA2 and COSMOS.
+For data manipulation, visualization, etc. further packages are needed which 
+are loaded here along with MOFA2 and COSMOS.
 
 ```{r Loading packages, message=FALSE}
+#imports
+library(readr)
+
+#core methods
 library(cosmosR)
 library(MOFA2)
-library(readr)
-library(ggplot2)
-library(ggfortify)
-library(dplyr)
-library(reshape2)
 library(liana)
 library(decoupleR)
-library(pheatmap)
-library(gridExtra)
+
+#data manipulations
+library(dplyr)
+library(reshape2)
 library(GSEABase)
 library(tidyr)
-library(RCy3)
-library(RColorBrewer)
 
+#plotting
+library(ggplot2)
+library(ggfortify)
+library(pheatmap)
+library(gridExtra)
+library(RColorBrewer)
+# library(RCy3)
+
+#some utility functions that will likely be incorporate to cosmosR package later on
 source("scripts/support_pheatmap_colors.R")
 source("scripts/support_functions.R")
 ```
 
 ### From omics data to MOFA ready input
 
-Since extensive pre-processing is beyond the scope of this tutorial, here only the transformation of pre-processed single omics data to a long data.frame (columns: "sample", "group", "feature", "view", "value") is shown. For more details and information regarding appropriate input, please refer to the MOFA tutorial [MOFA2: training a model in R](https://raw.githack.com/bioFAM/MOFA2_tutorials/master/R_tutorials/getting_started_R.html). The raw data is accessed through [NCI60 cellminer](https://discover.nci.nih.gov/cellminer/home.do) and the scripts for pre-processing can be found in the associated folder.
+Since extensive pre-processing is beyond the scope of this tutorial, here only 
+the transformation of pre-processed single omics data to a long data.frame 
+(columns: "sample", "group", "feature", "view", "value") is shown. For more 
+details and information regarding appropriate input, please refer to the MOFA 
+tutorial [MOFA2: training a model in R](https://raw.githack.com/bioFAM/MOFA2_tutorials/master/R_tutorials/getting_started_R.html). 
+The raw data is accessed through [NCI60 cellminer](https://discover.nci.nih.gov/cellminer/home.do) 
+and the scripts for pre-processing can be found in the associated folder.
 
-Here, we have the following views (with samples as columns and genes as rows): transcriptomics (RNA-seq [<PMID:31113817>](https://pubmed.ncbi.nlm.nih.gov/31113817/)), proteomics (SWATH (Mass spectrometry) [<PMID:31733513>](https://pubmed.ncbi.nlm.nih.gov/31733513/>)} and metabolomics (LC/MS & GC/MS (Mass spectrometry) [DTP NCI60 data](https://wiki.nci.nih.gov/display/NCIDTPdata/Molecular+Target+Data)). The group information is stored inside the RNA metadata and based on transcription factor clustering (see scripts/RNA/Analyze_RNA.R). Further, only samples are kept for which each omic is available (however this is not necessary since MOFA2 is able to impute data).
+Here, we have the following views (with samples as columns and genes as rows): 
+transcriptomics (RNA-seq [<PMID:31113817>](https://pubmed.ncbi.nlm.nih.gov/31113817/)), 
+proteomics (SWATH (Mass spectrometry) [<PMID:31733513>](https://pubmed.ncbi.nlm.nih.gov/31733513/>)} 
+and metabolomics (LC/MS & GC/MS (Mass spectrometry) [DTP NCI60 data](https://wiki.nci.nih.gov/display/NCIDTPdata/Molecular+Target+Data)). 
+The group information is stored inside the RNA metadata and based on 
+transcription factor clustering (see scripts/RNA/Analyze_RNA.R). Further, only 
+samples are kept for which each omic is available (however this is not 
+necessary since MOFA2 is able to impute data).
 
 ```{r Preparing MOFA input, message=FALSE}
 # Transcriptomics
@@ -84,10 +111,13 @@ RNA <- as.data.frame(read_csv("data/RNA/RNA_log2_FPKM_clean.csv"))
 rownames(RNA) <- RNA[,1]
 RNA <- RNA[,-1]
 
-## Remove genes with excessive amount of NAs (only keep genes with max. amount of NAs = 33.3 % across cell lines)
+## Remove genes with excessive amount of NAs (only keep genes with max. amount 
+#of NAs = 33.3 % across cell lines)
 RNA <- RNA[rowSums(is.na(RNA))<(dim(RNA)[2]/3),]
 
-## Only keep highly variable genes (as suggested by MOFA): here top ≈70% genes to keep >75% of TFs (103 out of 133). For stronger selection, we can further reduce the number of genes (e.g. top 50%)
+## Only keep highly variable genes (as suggested by MOFA): here top ≈70% genes 
+#to keep >75% of TFs (103 out of 133). For stronger selection, we can further 
+#reduce the number of genes (e.g. top 50%)
 RNA_sd <- sort(apply(RNA, 1, function(x) sd(x,na.rm = T)), decreasing = T)
 hist(RNA_sd, breaks = 100)
 hist(RNA_sd[1:6000], breaks = 100)
@@ -100,7 +130,8 @@ proteo <- as.data.frame(read_csv("data/proteomic/Prot_log10_SWATH_clean.csv"))
 rownames(proteo) <- proteo[,1]
 proteo <- proteo[,-1]
 
-## Only keep highly variable proteins (as suggested by MOFA): here top ≈60%. For stronger selection, we can further reduce the number of proteins (e.g. only keep top 50%)
+## Only keep highly variable proteins (as suggested by MOFA): here top ≈60%. 
+#For stronger selection, we can further reduce the number of proteins (e.g. only keep top 50%)
 proteo_sd <- sort(apply(proteo, 1, function(x) sd(x,na.rm = T)), decreasing = T)
 hist(proteo_sd, breaks = 100)
 hist(proteo_sd[1:round(dim(proteo)[1]*3/5)], breaks = 100)
@@ -113,7 +144,8 @@ metab <- as.data.frame(read_csv("data/metabolomic/metabolomic_clean_vsn.csv"))
 rownames(metab) <- metab[,1]
 metab <- metab[,-1]
 
-## Since we have only a limited number of metabolite measurements, all measurements are kept here
+## Since we have only a limited number of metabolite measurements, 
+#all measurements are kept here
 metab_sd <- apply(metab, 1, function(x) sd(x,na.rm=T))
 hist(metab_sd, breaks = 100)
 
@@ -156,11 +188,11 @@ The final data frame has the following structure:
 head(mofa_ready_data)
 ```
 
-We have successfully combined single omic data sets to a long multi-omics data frame.
-
+We have successfully combined single omic data sets to a long multi-omics data 
+frame that can be used as a MOFA input.
 
 In this part we assess the correlation between the RNA and proteomic data. We 
-both look for correlation across samples AND across features
+both look for correlation across samples AND across features.
 ```{r Supp figure condition_prot_RNA_correlation}
 condition_prot_RNA_correlation <- sapply(unique(mofa_ready_data$sample), function(condition){
   merged_data <- merge(mofa_ready_data[which(mofa_ready_data$sample == condition & mofa_ready_data$view == "RNA"),-c(1,3)],
@@ -183,9 +215,16 @@ single_prot_RNA_correlation <- sapply(overlap_genes, function(gene){
 
 hist(single_prot_RNA_correlation, breaks = 100)
 ```
+
 ### MOFA run
 
-After pre-processing the data into MOFA appropriate input, let's perform the MOFA analysis. To change specific MOFA options the function write_MOFA_options_file is used. For more information regarding option setting see [MOFA option tutorial](https://raw.githack.com/bioFAM/MOFA2_tutorials/master/R_tutorials/getting_started_R.html). Since we don't know how many factors are needed to explain our data well, various maximum numbers of factors are tested. The final results can be found in the results/mofa/ folder.
+After pre-processing the data into MOFA appropriate input, let's perform the 
+MOFA analysis. To change specific MOFA options the function 
+write_MOFA_options_file is used. For more information regarding option 
+setting see [MOFA option tutorial](https://raw.githack.com/bioFAM/MOFA2_tutorials/master/R_tutorials/getting_started_R.html). 
+Since we don't know how many factors are needed to explain our data well, 
+various maximum numbers of factors are tested. 
+The final results can be found in the results/mofa/ folder.
 
 ```{r MOFA options function, include=FALSE}
 write_MOFA_options_file <- function(input_file, 
@@ -235,13 +274,15 @@ write_MOFA_options_file <- function(input_file,
 }
 ```
 
-Only run this chunk if you want to re-perform the mofa optimisation. The results are already available in the 
-results/mofa folder. We are testing various amount of maximum number of factors that MOFA is allowed to explore.
+Only run this chunk if you want to re-perform the mofa optimisation. 
+The results are already available in the 
+results/mofa folder. We are testing various amount of maximum number of factors 
+that MOFA is allowed to explore.
 
 You need to instal mofapy2 in python3 to run this chunk. On windows, you can simply 
 run "python3" the terminal to make sure its installed or be automatically redirected 
 to the windows store page if it's not. Then, you can run "python3 -m pip install --user mofapy2"
-in a terminal to instal the module to python3.
+in a terminal to install the module to python3.
 
 
 ```{r MOFA run, eval=FALSE}
@@ -276,15 +317,22 @@ Then, we can compare the factors from different MOFA models and check on consist
 compare_factors(list(model7,model8,model9,model10,model11,model12,model13), cluster_rows = F, cluster_cols = F,)
 ```
 
-Here, we can see that the inferred MOFA factor weights do not change drastically around 10. For the sake of this tutorial, we choose the 10-factor MOFA model.
+Here, we can see that the inferred MOFA factor weights do not change drastically 
+around 9. For the sake of this tutorial, we choose the 9-factor MOFA model.
 
 ```{r Select MOFA model}
 model <- model10
 ```
 
-The next part deals with the analysis and interpretation of the MOFA factors with specific focus on the factor weights. A more detailed tutorial on how to perform downstream analysis after MOFA model training can be found here [MOFA+: downstream analysis (in R)](https://raw.githack.com/bioFAM/MOFA2_tutorials/master/R_tutorials/downstream_analysis.html). In this context, it is important to emphasize that the factors can be interpreted similarly to principal components (PCs) in a principal component analysis (PCA).
+The next part deals with the analysis and interpretation of the MOFA factors 
+with specific focus on the factor weights. The classic tutorial on how to 
+perform downstream analysis after MOFA model training can be found here [MOFA+: downstream analysis (in R)](https://raw.githack.com/bioFAM/MOFA2_tutorials/master/R_tutorials/downstream_analysis.html). 
+In this context, it is important to emphasize that the factors can be 
+interpreted similarly to principal components (PCs) in a principal component 
+analysis (PCA).
 
-An initial metric we can explore is the total variance ($R^2$) explained per view by our MOFA model. This helps us understand how well the model represents the data.
+An initial metric we can explore is the total variance ($R^2$) explained per 
+view by our MOFA model. This helps us understand how well the model represents the data.
 
 ```{r Total variance per factor}
 # Investigate factors: Explained total variance per view
@@ -292,9 +340,18 @@ plot_variance_explained(model, x="group", y="factor", plot_total = T)[[2]]
 calculate_variance_explained(model)
 ```
 
-The bar plot demonstrates that the nine factors for the view RNA explain more than 50% of the variance. In contrast, for both metabolomics as well as proteomics around 20% of the variance can be explained by all factors.
+The bar plot demonstrates that the nine factors for the view RNA explain more 
+than 50% of the variance. In contrast, for both metabolomics as well as 
+proteomics around 20% of the variance can be explained by all factors.
 
-It isn't unexpected that more variance of the RNA dataset can be reconstructed. Usually, more features available in a given view will lead to a higher % of variance explained. It is interesting to notice though that similar amount of variance are explained for metabolic and proteomic views, despite having very different number of features. this may be due to the fact that metabolite abundances are in general more cross-correlated than protein abundances (due to the underlying regulatory structures, e.i. reaction networks vs protein synthesis and degratation regulatory mechanisms).
+It isn't unexpected that more variance of the RNA dataset can be reconstructed. 
+Usually, more features available in a given view will lead to 
+a higher % of variance explained. It is interesting to notice though that 
+similar amount of variance are explained for metabolic and proteomic views, 
+despite having very different number of features. This may be due to the fact 
+that metabolite abundances are in general more cross-correlated than protein 
+abundances (due to the underlying regulatory structures, e.i. reaction networks 
+vs protein synthesis and degratation regulatory mechanisms).
 
 ```{r Chekc cross correlation of omics compared to variance epxlained}
 #Get the cross correlation for RNA and proteomic data
@@ -353,9 +410,9 @@ mofa_nfeatures
 summary(lm(data= df_variance_crosscor, var_expl~prod))
 summary(lm(data= df_variance_crosscor, var_expl~n_features))
 ```
-
-
-Since we would like to use the found correlation for downstream COSMOS analysis, we first investigate the variance ($R^2$) each factor can explain per view as well as investigate the factor explaining the most variance across all views.
+Since we would like to use the found correlation for downstream COSMOS analysis, 
+we first investigate the variance ($R^2$) each factor can explain per view as 
+well as investigate the factor explaining the most variance across all views.
 
 ```{r Variance per view per factor}
 # Investigate factors: Explained variance per view for each factor 
@@ -363,7 +420,13 @@ pheatmap(model@cache$variance_explained$r2_per_factor[[1]], display_numbers = T,
 pheatmap(model@cache$variance_explained$r2_per_factor[[1]], display_numbers = T, angle_col = "0", legend_labels = c("0","10", "20", "30", "40", "Variance\n\n"), legend = T, main = "", legend_breaks = c(0,10, 20, 30, 40, max(model@cache$variance_explained$r2_per_factor[[1]])), cluster_rows = F, cluster_cols = F, color = colorRampPalette(c("white","red"))(100), fontsize_number = 10,filename = "results/mofa/variance_heatmap.pdf",width = 4, height = 2.5)
 ```
 
-By analyzing this heatmap, we can observe that Factor 1 and 5 explain a large proportion of variance of the RNA, Factor 2 mainly explains the variance of the metabolomics and Factor 3 highlights variability from the proteomics view. Consequently, no factor explains a large portion of the variance across all views, but factor 2 and 4 capture variance across all views. We can also analyze the correlation between factors. The next plot highlights the spearman correlation between each factor.
+By analyzing this heatmap, we can observe that Factor 1 and 5 explain a large 
+proportion of variance of the RNA, Factor 2 and 4 mainly explains the variance of 
+the metabolomics and Factor 3 highlights variability from the proteomics view. 
+Consequently, no factor explains a large portion of the variance across all 
+views, but factor 2 and 4 capture variance across all views. We can also 
+analyze the correlation between factors. The next plot highlights the spearman 
+correlation between each factor.
 
 ```{r Correlation between factors}
 # Investigate factors: Correlation between factors 
@@ -371,10 +434,18 @@ pdf(file="results/mofa/plot_factor_cor.pdf", height = 5, width = 5)
 plot_factor_cor(model, type = 'upper', method = "spearman", addCoef.col = "black")
 ```
 
-Next, we can characterize the factors with the available metadata of samples. Indeed, it can be interesting to see if some factors are associated with metadata classes, as they can help to guide our intepretation of the factors.
-This part rely on an interpretation of the Z matrix of the mofa model, while ignoring the factor weight themselves. The factor weights will be analysed subsequently.
+Next, we can characterize the factors with the available metadata of samples. 
+Indeed, it can be interesting to see if some factors are associated with 
+metadata classes, as they can help to guide our intepretation of the factors.
+This part rely on an interpretation of the Z matrix of the mofa model, while 
+ignoring the factor weight themselves. The factor weights will be analysed subsequently.
 
-To begin simply, we can check if some tissue of origin are associated with any of the factors. There are different ways thsi can be done, but we find that using a simple linear association between a given tissues category in a factor compared to any other tissue categories (e.g. breast tissue vs every other tissue types) provide an easy to interpret insight that serves our purpose well. To do so, we use the Univariate Linear Model (ULM) function of decoupleR
+To begin simply, we can check if some tissue of origin are associated with any 
+of the factors. There are different ways thsi can be done, but we find that 
+using a simple linear association between a given tissues category in a factor 
+compared to any other tissue categories (e.g. breast tissue vs every other 
+tissue types) provide an easy to interpret insight that serves our purpose 
+well. To do so, we use the Univariate Linear Model (ULM) function of decoupleR.
 
 ```{r tissue type analysis}
 NCI_60_metadata <- as.data.frame(read_csv(file = "data/metadata/RNA_metadata_cluster.csv"))
@@ -384,7 +455,6 @@ NCI_60_metadata$`age over 50` <- NCI_60_metadata$`age a` > 50
 tissues <-NCI_60_metadata[,c(3,1)]
 names(tissues) <- c("source","target")
 
-  
 Z_matrix <- as.data.frame(model@expectations$Z$single_group)
 
 #Check specifically tissue meta-data association with Z matrix
@@ -462,15 +532,20 @@ grid.arrange(
 
 ```
 
-Using this visualization, features with strong association with the factor (large absolute values) can be easily identified and further inspected by literature investigation.
+Using this visualization, features with strong association with the factor 
+(large absolute values) can be easily identified and further inspected by 
+literature investigation.
 
 Further tools to investigate the latent factors are available inside the MOFA framework ([MOFA+: downstream analysis (in R)](https://raw.githack.com/bioFAM/MOFA2_tutorials/master/R_tutorials/downstream_analysis.html)).
 
 ### From MOFA output to TF activity, ligand-receptor activity
 
-In the next step, using the weights of Factor 4 (highest shared $R^2$ across views), different databases (liana and dorothea) and decoupleR, the transcription factor activities, ligand-receptor scores are estimated.
+In the next step, using the weights of Factor 4 (highest shared $R^2$ across 
+views), different databases (liana and dorothea) and decoupleR, the 
+transcription factor activities, ligand-receptor scores are estimated.
 
-First, we have to extract the weights from our MOFA model and keep the weights from Factor 4 in the RNA view.
+First, we have to extract the weights from our MOFA model and keep the 
+weights from Factor 4 in the RNA view.
 
 ```{r Extract weights from Model}
 weights <- get_weights(model, views = "all", factors = "all")
@@ -513,7 +588,7 @@ pheatmap(RNA_top, show_rownames = T, cluster_cols = F, cluster_rows = F,color = 
 pheatmap(RNA_top, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315)
 ```
 
-WE can do the same for metabolites
+We can do the same for metabolites
 
 ```{r Metabs across factors, fig.width=4, fig.height=2.2}
 metabs_all <- as.data.frame(weights$metab) 
@@ -528,7 +603,11 @@ pheatmap(metabs_top, show_rownames = T, cluster_cols = F, cluster_rows = F,color
 pheatmap(metabs_top, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315)
 ```
 
-Then, by using decoupleR and prior knowledge networks, we calculate the different regulatory activities inferred by the ULM approach. Depending on the task, the minimum number of targets per source varies required to maintain the source in the output (e.g. two targets by definition for ligand-receptor interactions). Here can display them as heatmaps.
+Then, by using decoupleR and prior knowledge networks, we calculate the 
+different regulatory activities inferred by the ULM approach. Depending 
+on the task, the minimum number of targets per source varies required to 
+maintain the source in the output (e.g. two targets by definition for 
+ligand-receptor interactions). Here can display them as heatmaps.
 
 ```{r LR score estimations across factors, fig.width=4, fig.height=4.3}
 # Calculate regulatory activities from Receptor and Ligand network
@@ -555,7 +634,8 @@ pheatmap(TF_factors, show_rownames = T, cluster_cols = F, cluster_rows = F,color
 pheatmap(TF_factors, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315)
 ```
 
-These activtiy estiamtions are saved in an input file for further downstream analysis as well.
+These activity estimations are saved in an input file for further downstream 
+analysis as well.
 
 ```{r Activity estimations for factor 4}
 # Calculate regulatory activities from Receptor and Ligand network
@@ -590,13 +670,17 @@ ligrec_TF_moon_inputs <- list("ligrec" = ligrec_high_vs_low_vector,
 save(ligrec_TF_moon_inputs, file = "data/cosmos/ligrec_TF_moon_inputs.Rdata")
 ```
 
-We have now successfully used the MOFA weights (Factor 4, RNA view) to infer not only TF activities but also the ligand-receptor interactions.
+We have now successfully used the MOFA weights (Factor 4, RNA view) to infer 
+not only TF activities but also the ligand-receptor interactions.
 
 ### Extracting network with COSMOS to formulate mechanistic hypotheses
 
-In this next parts the COSMOS run is going to be performed. We can use the output of decoupleR (the activities) next to the factor weights as an input for COSMOS to specifically focus the analysis on pre-computed data-driven results.
+In this next parts the COSMOS run is going to be performed. We can use the 
+output of decoupleR (the activities) next to the factor weights as an input 
+for COSMOS to specifically focus the analysis on pre-computed data-driven results.
 
-Here, in the first step, the data is loaded. Besides the activity estimations and the factor weights, the previous filtered out expressed gene names are loaded.
+Here, in the first step, the data is loaded. Besides the activity estimations 
+and the factor weights, the previous filtered out expressed gene names are loaded.
 
 ```{r Load COSMOS input, message=FALSE, warning=FALSE, error=FALSE, results='hide'}
 # Load data
@@ -616,8 +700,8 @@ names(prot_input) <- gsub("_proteo","",names(prot_input))
 expressed_genes <- as.data.frame(read_csv("data/RNA/RNA_log2_FPKM_clean.csv"))$Genes #since only complete cases were considered in the first part, here the full gene list is loaded
 ```
 
-We can be interested in looking how RNA and corresponding proteins correlate in each factor.
-We can plot this using scatter plots for each factors.
+We can be interested in looking how RNA and corresponding proteins correlate in 
+each factor. We can plot this using scatter plots for each factors.
 ```{r correlation RNA/prot, fig.width=7, fig.height=7}
 weights_RNA <- as.data.frame(weights$RNA)
 weights_prot <- as.data.frame(weights$proteo)
@@ -648,11 +732,17 @@ r2_vec
 
 ggsave(filename = "results/mofa/RNA_prot_cor.pdf",plot = do.call("grid.arrange", c(plot_list, ncol = 3)), device = "pdf")
 ```
-Coherently, only the factors where there is variance explained for both RNA and proteins are correlated.
+Coherently, only the factors where there is variance explained for both RNA and 
+proteins are correlated.
 
-Next, we perform filtering steps in order to identify top deregulated features. Here, the individual filtering is based on absolute factor weight or activity score. The first step involves the visualization of the respective distribution to define an appropriate threshold.
+Next, we perform filtering steps in order to identify top deregulated features. 
+Here, the individual filtering is based on absolute factor weight or activity 
+score. The first step involves the visualization of the respective distribution 
+to define an appropriate threshold.
 
-First, the RNA factor weights are filtered based on a threshold defined by their distribution as well a threshold defined by the distribution of the protein factor weights.
+First, the RNA factor weights are filtered based on a threshold defined by their 
+distribution as well a threshold defined by the distribution of the protein 
+factor weights.
 
 ```{r Plot: RNA weights & protein weights}
 ##RNA
@@ -665,7 +755,11 @@ abline(v = -0.05)
 abline(v = 0.05)}
 ```
 
-Based on the plots and indicated by the straight lines, the RNA weights threshold is set to -0.2 and 0.2, and the protein weights threshold to -0.05 and 0.05. RNA factor weight values lying inside this threshold are set to 0 and previously filtered out genes (before MOFA analysis) are also included with value 0.
+Based on the plots and indicated by the straight lines, the RNA weights 
+threshold is set to -0.2 and 0.2, and the protein weights threshold to -0.05 
+and 0.05. RNA factor weight values lying inside this threshold are set to 0 
+and previously filtered out genes (before MOFA analysis) are also included with 
+value 0.
 
 ```{r Filtering RNA weights}
 for(gene in names(RNA_input)) {
@@ -705,7 +799,9 @@ abline(v = -0.5)
 abline(v = 3.5)}
 ```
 
-The threshold is set to -0.5 and 3.5 respectively. Further, the TF_to_remove variable is later used to remove transcription factors with activities below this threshold from the prior knowledge network.
+The threshold is set to -0.5 and 3.5 respectively. Further, the 
+TF_to_remove variable is later used to remove transcription factors with
+activities below this threshold from the prior knowledge network.
 
 ```{r Filtering TF activity estimates}
 TF_to_remove <- signaling_input[signaling_input > -0.5 & signaling_input < 3.5]
@@ -721,7 +817,13 @@ abline(v = -0.5)
 abline(v = 2.5)}
 ```
 
-Here, only activities higher than 2.5 or lower than -0.5 are kept (see straight lines in plot). This is an arbitrary theshold aimed at keeping a relativelly high number of interesting fetures to connect in the rest of the pipeline. Since at this point we are interested in the receptors, the names are adjusted accordingly and if there are multiple mentions of a receptor, its activity is calculated by the mean of the associated ligand-receptor interactions.
+Here, only activities higher than 2.5 or lower than -0.5 are kept 
+(see straight lines in plot). This is an arbitrary theshold aimed at keeping a 
+relativelly high number of interesting fetures to connect in the rest of the 
+pipeline. Since at this point we are interested in the receptors, the names 
+are adjusted accordingly and if there are multiple mentions of a receptor, 
+its activity is calculated by the mean of the associated ligand-receptor 
+interactions.
 
 ```{r Filtering ligand-receptor activity estimates}
 ligrec_input <- ligrec_input[ligrec_input > 2.5 | ligrec_input < -0.5]
@@ -744,7 +846,13 @@ abline(v = -0.2)
 abline(v = 0.2)}
 ```
 
-The threshold is set to 0.2 and -0.2 respectively. Further, the metab_to_exclude variable is later used to remove metabolites with activities below this threshold from the prior knowledge network. Moreover, metabolite names are translated into HMDB format and metabolic compartment codes (m = mitochondria, c = cytosol) as well as metab\_\_ prefix is added to HMDB IDs. More information regarding compartment codes can be found [here](http://bigg.ucsd.edu/compartments).
+The threshold is set to 0.2 and -0.2 respectively. Further, the metab_to_exclude 
+variable is later used to remove metabolites with activities below this 
+threshold from the prior knowledge network. Moreover, metabolite names are 
+translated into HMDB format and metabolic compartment codes 
+(m = mitochondria, c = cytosol) as well as metab\_\_ prefix is added to HMDB 
+IDs. More information regarding compartment codes can be 
+found [here](http://bigg.ucsd.edu/compartments).
 
 ```{r Filtering metabolite factor weights, message=FALSE, warning=FALSE, error=FALSE, results='hide'}
 metab_to_HMDB <- as.data.frame(
@@ -759,7 +867,11 @@ metab_to_exclude <- metab_inputs[abs(metab_inputs) < 0.2]
 metab_inputs <- metab_inputs[abs(metab_inputs) > 0.2]
 ```
 
-Next, the prior knowledge network (PKN) is loaded. To see how the full meta PKN was assembled, see [PKN](https://github.com/saezlab/meta_PKN_BIGG.git). Since we are not interested in including transcription factors and metabolites that were previously filtered out, we also remove the respective nodes from the PKN.
+Next, the prior knowledge network (PKN) is loaded. To see how the full meta 
+PKN was assembled, see [PKN](https://github.com/saezlab/meta_PKN_BIGG.git). 
+Since we are not interested in including transcription factors and metabolites 
+that were previously filtered out, we also remove the respective nodes from 
+the PKN.
 
 ```{r Meta network, warning=F}
 ## Load and filter meta network
@@ -769,15 +881,25 @@ load("support/meta_network.RData")
 
 meta_network <- meta_network_cleanup(meta_network)
 
-meta_network <- meta_network[!(meta_network$source %in% names(TF_to_remove)) & !(meta_network$target %in% names(TF_to_remove)),]
-meta_network <- meta_network[!(meta_network$source %in% names(metab_to_exclude)) & !(meta_network$target %in% names(metab_to_exclude)),]
+meta_network <- meta_network[!(meta_network$source %in% names(TF_to_remove)) 
+                             & !(meta_network$target %in% names(TF_to_remove)),]
+meta_network <- meta_network[!(meta_network$source %in% names(metab_to_exclude)) 
+                             & !(meta_network$target %in% names(metab_to_exclude)),]
 ```
 
-Then the datasets are merged, entries that are not included in the PKN are removed and the filtering steps are completed. The merging in this case is based on the idea of deriving the forward network via the receptor to transcription factor/metabolite direction. We will perform first the first cosmos run between recptors and downstream TFs and metabolites. The second run will focus on connecting TFs awith downstream ligands. 
+Then the datasets are merged, entries that are not included in the PKN are 
+removed and the filtering steps are completed. The merging in this case is 
+based on the idea of deriving the forward network via the receptor to 
+transcription factor/metabolite direction. We will perform first the first 
+cosmos run between recptors and downstream TFs and metabolites. The second 
+run will focus on connecting TFs awith downstream ligands. 
 
-Thus, we first define the upstream input as receptors, and the downstream input as TFs and metabolites.
-Since the scoring of the network is sensitive to the scale of the downstream measurments, we are multiplying 
-the metabolite weights by 10 so that they are on a similar scale as the TF scores. Other scaling methods can be performed at the user'S discretion,
+Thus, we first define the upstream input as receptors, and the downstream input 
+as TFs and metabolites.
+Since the scoring of the network is sensitive to the scale of the downstream 
+measurments, we are multiplying 
+the metabolite weights by 10 so that they are on a similar scale as the TF 
+scores. Other scaling methods can be performed at the user'S discretion,
 this one is just a rough scaling, but good enough in this case.
 
 ```{r Merge datasets to input}
@@ -797,9 +919,6 @@ In this part, we will run the network scoring to generate mechanistic hypotheses
 connecting ligands, receptors, TFs and metabolites, while pruning the 
 network with information from both RNA and protein abundance to constrain the 
 flux of signal consistent with the molecular data available.
-
-This method is easier to set up and interpret than the classic cosmos run that 
-relies on CPLEX and CARNIVAL.
 
 In this approach, the network is compressed to avoid having redundant paths in 
 the network leading to inflating the importance of some input measurements. 

@@ -11,6 +11,9 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+However, the legacy network optimisation of COSMOS was done through CARNIVAL, which requires the interactive version of IBM Cplex or CBC-COIN solver as the network optimizer. Thus, the classic cosmos run using the CARNIVAL back end is still presnet in this tutorial as a comparison reference, but is optional. IF you wish to reproduce it, The IBM ILOG Cplex is freely available through Academic Initiative [here](https://community.ibm.com/community/user/datascience/blogs/xavier-nodet1/2020/07/09/cplex-free-for-students). As an alternative, the CBC solver is open source and freely available for any user, but has a significantly lower performance than CPLEX. The CBC executable can be find under cbc/. Alternatively for small networks, users can rely on the freely available lpSolve R-package, which is automatically installed with the package.
+
+In this tutorial we use *CPLEX* for means of comparison with the newer MOON function that doesn't rely on optimisation.
 
 ```{r}
 library(readr)
