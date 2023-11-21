@@ -697,7 +697,7 @@ metab_inputs <- weights$metab[,4]
 names(RNA_input) <- gsub("_RNA","",names(RNA_input))
 names(prot_input) <- gsub("_proteo","",names(prot_input))
 
-expressed_genes <- as.data.frame(read_csv("data/RNA/RNA_log2_FPKM_clean.csv"))$Genes #since only complete cases were considered in the first part, here the full gene list is loaded
+RNA_log2_FPKM <- as.data.frame(read_csv("data/RNA/RNA_log2_FPKM_clean.csv"))$Genes #since only complete cases were considered in the first part, here the full gene list is loaded
 ```
 
 We can be interested in looking how RNA and corresponding proteins correlate in 
@@ -770,7 +770,7 @@ for(gene in names(RNA_input)) {
   {
     RNA_input[gene] <- sign(RNA_input[gene]) * 10
   }
-  if (gene %in% names(prot_input))
+  if (gene %in% names(prot_input)) #will need to add a sign consistency check between RNA and prot as well
   {
     if (prot_input[gene] > -0.05 & prot_input[gene] < 0.05)
     {
@@ -782,12 +782,12 @@ for(gene in names(RNA_input)) {
   }
 }
 
-expressed_genes <- expressed_genes[!(expressed_genes %in% names(RNA_input))]
-genes <- expressed_genes
-expressed_genes <- rep(0,length(expressed_genes))
-names(expressed_genes) <- genes
+RNA_log2_FPKM <- RNA_log2_FPKM[!(RNA_log2_FPKM %in% names(RNA_input))]
+genes <- RNA_log2_FPKM
+RNA_log2_FPKM <- rep(0,length(RNA_log2_FPKM))
+names(RNA_log2_FPKM) <- genes
 
-RNA_input <- c(RNA_input, expressed_genes)
+RNA_input <- c(RNA_input, RNA_log2_FPKM)
 ```
 
 The same procedure is repeated for the transcription factor activities.
@@ -903,14 +903,14 @@ scores. Other scaling methods can be performed at the user'S discretion,
 this one is just a rough scaling, but good enough in this case.
 
 ```{r Merge datasets to input}
-upstream_inputs <- c(rec_inputs)
-downstream_inputs <- c(metab_inputs*10, signaling_input)
-
-upstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(upstream_inputs, meta_network)
-downstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(downstream_inputs, meta_network)
-
-rec_to_TF_cosmos_input <- list(upstream_inputs_filtered, downstream_inputs_filtered)
-save(rec_to_TF_cosmos_input, file = "data/cosmos/rec_to_TF_cosmos_input.Rdata")
+# upstream_inputs <- c(rec_inputs)
+# downstream_inputs <- c(metab_inputs*10, signaling_input)
+# 
+# upstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(upstream_inputs, meta_network)
+# downstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(downstream_inputs, meta_network)
+# 
+# rec_to_TF_cosmos_input <- list(upstream_inputs_filtered, downstream_inputs_filtered)
+# save(rec_to_TF_cosmos_input, file = "data/cosmos/rec_to_TF_cosmos_input.Rdata")
 ```
 
 ### MOON (meta footprint analysis) 
@@ -927,9 +927,9 @@ the network leading to inflating the importance of some input measurements.
 ##filter expressed genes from PKN
 # data("meta_network")
 # save(meta_network, file = "support/meta_network.RData")
-load("support/meta_network.RData")
+# load("support/meta_network.RData")
 
-meta_network <- meta_network_cleanup(meta_network)
+# meta_network <- meta_network_cleanup(meta_network)
 
 expressed_genes <- as.data.frame(read_csv("data/RNA/RNA_log2_FPKM_clean.csv"))
 expressed_genes <- setNames(rep(1,length(expressed_genes[,1])), expressed_genes$Genes)
@@ -982,8 +982,8 @@ meta_network_compressed <- meta_network_cleanup(meta_network_compressed)
 
 load(file = "support/dorothea_df.RData")
 
-RNA_input <- as.numeric(weights$RNA[,4])
-names(RNA_input) <- gsub("_RNA$","",row.names(weights$RNA))
+# RNA_input <- as.numeric(weights$RNA[,4])
+# names(RNA_input) <- gsub("_RNA$","",row.names(weights$RNA))
 ```
 
 In this step, we format the MOFA weight and activity score information so that it can be appended to the moon network result afterward.
@@ -1086,8 +1086,6 @@ then, the network is decompressed, IDs are translated in a human-friendly format
 solution network is generated with the reduce_solution_network function.
 
 ```{r Run moon rec_to_TFmetab}
-data("HMDB_mapper_vec")
-
 meta_network_rec_to_TFmetab <- meta_network_compressed
 
 #We run moon in a loop until TF-target coherence convergences
@@ -1175,10 +1173,7 @@ downstream input definition is changing.
 dorothea_PKN <- dorothea_df[,c(1,3,2)]
 names(dorothea_PKN)[2] <- "interaction"
 
-expressed_genes <- as.data.frame(read_csv("data/RNA/RNA_log2_FPKM_clean.csv"))
-expressed_genes <- setNames(rep(1,length(expressed_genes[,1])), expressed_genes$Genes)
 dorothea_PKN_filtered <- cosmosR:::filter_pkn_expressed_genes(names(expressed_genes), meta_pkn = dorothea_PKN)
-
 
 #prepare upstream inputs
 
@@ -1214,11 +1209,11 @@ downstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(downstream
 dorothea_PKN_filtered <- cosmosR:::keep_observable_neighbours(dorothea_PKN_filtered, n_steps, names(downstream_inputs_filtered))
 upstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(upstream_inputs_filtered, dorothea_PKN_filtered)
 
-#compress the network to avoid redundant master controllers
-load(file = "support/dorothea_df.RData")
 
-RNA_input <- as.numeric(weights$RNA[,4])
-names(RNA_input) <- gsub("_RNA$","",row.names(weights$RNA))
+# load(file = "support/dorothea_df.RData")
+
+# RNA_input <- as.numeric(weights$RNA[,4])
+# names(RNA_input) <- gsub("_RNA$","",row.names(weights$RNA))
 ```
 
 ```{r run moon TF to lig}
