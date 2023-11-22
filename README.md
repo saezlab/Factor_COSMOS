@@ -1,6 +1,8 @@
 # NCI60_mofa_cosmos
 
-Tutorial on how to use the MOFA-COSMOS pipeline in order to generate testable hypothesis connecting MOFA outputs with COSMOS network inference.
+Tutorial on how to use the MOFA-COSMOS pipeline in order to generate testable hypothesis connecting MOFA outputs with COSMOS network inference. This tutorial is especially targeted at dataset that span transcriptomic, proteomic and metabolomic. 
+
+If you want to see how to integrate phospho-proteomic and transcriptomic data, or if you are only interested in MOON, you can find a specifically tailored tutorial for that here: https://github.com/saezlab/MOON_example
 
 ## TLDR:
 The main pipleine script with all explanations can be found in this repository: MOFA_to_COSMOS.md (https://github.com/saezlab/Factor_COSMOS/blob/main/MOFA_to_COSMOS.md)
