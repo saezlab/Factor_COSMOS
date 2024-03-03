@@ -192,7 +192,17 @@ We have successfully combined single omic data sets to a long multi-omics data
 frame that can be used as a MOFA input.
 
 In this part we assess the correlation between the RNA and proteomic data. We 
-both look for correlation across samples AND across features.
+both look for correlation across samples AND across features. When we check 
+across sample, we interrogate the correlation at the level of single genes, that
+is for given gene, how is a change is transcript abundance is reflected in the 
+the level of its protein. This correlation can be different between genes, as 
+there are all subject to different regulatory mechanisms. when we check across 
+features, we interrogate the correlation at the level of single samples. that is,
+we check if overall the protein abundance are good proxy of transcript abundance, 
+and vice-versa. The imperfect correlation between trnaxcripts and proteins 
+reflects the complexity of the translation process, as well as protein and RNA 
+stability.
+
 ```{r Supp figure condition_prot_RNA_correlation}
 condition_prot_RNA_correlation <- sapply(unique(mofa_ready_data$sample), function(condition){
   merged_data <- merge(mofa_ready_data[which(mofa_ready_data$sample == condition & mofa_ready_data$view == "RNA"),-c(1,3)],
@@ -203,6 +213,7 @@ condition_prot_RNA_correlation <- sapply(unique(mofa_ready_data$sample), functio
 
 hist(condition_prot_RNA_correlation, breaks = 20)
 ```
+
 
 ```{r Supp figure single_prot_RNA_correlation}
 overlap_genes <- unique(intersect(proteo$feature,RNA$feature))
@@ -295,7 +306,10 @@ system(paste0(paste('python3', wd, sep = " "), paste('/scripts/mofa/mofa2.py', "
 
 ### Investigate MOFA output
 
-We first load the different MOFA models containing the MOFA results together with the metadata information.
+We first load the different MOFA models containing the MOFA results together 
+with the metadata information. Since we don't know a-priori which is the ideal 
+number of factors, we can settle on the highest number of factor where the 
+model stabilises. 
 
 ```{r Loading MOFA output, message=FALSE, warning=F}
 # Load MOFA output
@@ -1322,7 +1336,9 @@ write_csv(moon_res_TF_lig, file = "results/cosmos/moon/moon_res_TF_lig.csv")
 ```
 ### Further analyses
 
-Further MOFA-COSMOS downstream analyses focusing on analyzing network control structures and cell line specific MOFA transcriptomics are given in ./pathway_control_analysis_moon.Rmd and ./Cell_line_MOFA_space.Rmd
+Further MOFA-COSMOS downstream analyses focusing on analyzing network control 
+structures and cell line specific MOFA transcriptomics are 
+given in ./pathway_control_analysis_moon.Rmd and ./Cell_line_MOFA_space.Rmd
 
 ### Session info
 
