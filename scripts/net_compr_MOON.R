@@ -62,13 +62,13 @@ after <- 0
 i <- 1
 while (before != after & i < 10) {
   before <- length(meta_network_TF_to_metab[,1])
-  recursive_decoupleRnival_res <- moon(upstream_input = sig_input, 
+  moon_res <- moon(upstream_input = sig_input, 
                                                  downstream_input = metab_input, 
                                                  meta_network = meta_network_TF_to_metab, 
                                                  n_layers = n_steps, 
-                                                 statistic = "ulm") # 1000 is better for definitive results
+                                                 statistic = "ulm") 
   
-  meta_network_TF_to_metab <- filter_incohrent_TF_target(recursive_decoupleRnival_res, dorothea_reg, meta_network_TF_to_metab, RNA_input)
+  meta_network_TF_to_metab <- filter_incohrent_TF_target(moon_res, dorothea_reg, meta_network_TF_to_metab, RNA_input)
   after <- length(meta_network_TF_to_metab[,1])
   i <- i + 1
 }
@@ -82,7 +82,7 @@ if(i < 10)
 }
 
 #####
-# write_csv(recursive_decoupleRnival_res, file = paste("results/decoupleRnival/",paste(cell_line, "_ATT_decouplerino_full.csv",sep = ""), sep = ""))
+write_csv(moon_res, file = paste("results/moon/",paste(cell_line, "_ATT_decouplerino_full.csv",sep = ""), sep = ""))
 
 node_signatures <- meta_network_compressed_list$node_signatures
 duplicated_parents <- meta_network_compressed_list$duplicated_signatures
@@ -102,15 +102,15 @@ addons <- as.data.frame(rbind(addons,final_leaves))
 
 mapping_table <- as.data.frame(rbind(duplicated_parents_df,addons))
 
-recursive_decoupleRnival_res <- merge(recursive_decoupleRnival_res, mapping_table, by = "source")
-recursive_decoupleRnival_res <- recursive_decoupleRnival_res[,c(4,2)]
-names(recursive_decoupleRnival_res)[1] <- "source"
+moon_res <- merge(moon_res, mapping_table, by = "source")
+moon_res <- moon_res[,c(4,2)]
+names(moon_res)[1] <- "source"
 
-plot(density(recursive_decoupleRnival_res$score))
+plot(density(moon_res$score))
 abline(v = 1)
 abline(v = -1)
 
-solution_network <- reduce_solution_network(decoupleRnival_res = recursive_decoupleRnival_res, 
+solution_network <- reduce_solution_network(moon_res = moon_res, 
                                             meta_network = meta_network,
                                             cutoff = 1, 
                                             upstream_input = sig_input, 
@@ -132,9 +132,9 @@ write_csv(SIF, file = paste("results/",paste(cell_line, "_dec_compressed_SIF.csv
 write_csv(ATT, file = paste("results/",paste(cell_line, "_dec_compressed_ATT.csv",sep = ""), sep = ""))
 
 
-X7860_ATT_decouplerino_full <- as.data.frame(read_csv("results/decoupleRnival/7860_ATT_decouplerino_full.csv"))
+X7860_ATT_decouplerino_full <- as.data.frame(read_csv("results/moon/7860_ATT_decouplerino_full.csv"))
 
-temp <- merge(recursive_decoupleRnival_res, X7860_ATT_decouplerino_full, by = "source")
+temp <- merge(moon_res, X7860_ATT_decouplerino_full, by = "source")
 
 plot(temp$score.x, temp$score.y)
 
