@@ -1,9 +1,12 @@
+# We advise to instal from github to get the latest version of the tool.
+# if (!requireNamespace("devtools", quietly = TRUE))
+#   install.packages("devtools")
+# 
+# devtools::install_github("saezlab/cosmosR")
+
 library(cosmosR)
-library(ocean)
 library(reshape2)
 library(readr)
-
-# source("scripts/translate_res.R")
 
 data("meta_network")
 
