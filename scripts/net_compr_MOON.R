@@ -46,6 +46,8 @@ metab_input <- cosmosR:::filter_input_nodes_not_in_pkn(metab_input, meta_network
 meta_network <- cosmosR:::keep_observable_neighbours(meta_network, n_steps, names(metab_input))
 sig_input <- cosmosR:::filter_input_nodes_not_in_pkn(sig_input, meta_network)
 
+
+#compress the network
 meta_network_compressed_list <- compress_same_children(meta_network, sig_input = sig_input, metab_input = metab_input)
 
 meta_network_compressed <- meta_network_compressed_list$compressed_network
