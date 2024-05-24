@@ -4,6 +4,15 @@ Tutorial on how to use the MOFA-COSMOS pipeline in order to generate testable hy
 
 If you want to see how to integrate phospho-proteomic and transcriptomic data, or if you are only interested in MOON, you can find a specifically tailored tutorial for that here: https://github.com/saezlab/MOON_example
 
+## Install cosmosR
+R >= 4.1 is required
+```r
+if (!requireNamespace("devtools", quietly = TRUE))
+    install.packages("devtools")
+    
+devtools::install_github("saezlab/cosmosR")
+```
+
 ## TLDR:
 The main pipleine script with all explanations can be found in this repository: MOFA_to_COSMOS.md (https://github.com/saezlab/Factor_COSMOS/blob/main/MOFA_to_COSMOS.md)
 
