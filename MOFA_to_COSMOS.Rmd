@@ -79,10 +79,6 @@ library(pheatmap)
 library(gridExtra)
 library(RColorBrewer)
 # library(RCy3)
-
-#some utility functions that will likely be incorporate to cosmosR package later on
-source("scripts/support_pheatmap_colors.R")
-source("scripts/support_functions.R")
 ```
 
 ### From omics data to MOFA ready input

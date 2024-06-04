@@ -71,10 +71,6 @@ library(pheatmap)
 library(gridExtra)
 library(RColorBrewer)
 # library(RCy3)
-
-#some utility functions that will likely be incorporate to cosmosR package later on
-source("scripts/support_pheatmap_colors.R")
-source("scripts/support_functions.R")
 ```
 
 ### From omics data to MOFA ready input
@@ -222,6 +218,16 @@ multi-omics data frame that can be used as a MOFA input.
 
 In this part we assess the correlation between the RNA and proteomic
 data. We both look for correlation across samples AND across features.
+When we check across sample, we interrogate the correlation at the level
+of single genes, that is for given gene, how is a change is transcript
+abundance is reflected in the the level of its protein. This correlation
+can be different between genes, as there are all subject to different
+regulatory mechanisms. when we check across features, we interrogate the
+correlation at the level of single samples. that is, we check if overall
+the protein abundance are good proxy of transcript abundance, and
+vice-versa. The imperfect correlation between trnaxcripts and proteins
+reflects the complexity of the translation process, as well as protein
+and RNA stability.
 
 ``` r
 condition_prot_RNA_correlation <- sapply(unique(mofa_ready_data$sample), function(condition){
@@ -283,7 +289,9 @@ system(paste0(paste('python3', wd, sep = " "), paste('/scripts/mofa/mofa2.py', "
 ### Investigate MOFA output
 
 We first load the different MOFA models containing the MOFA results
-together with the metadata information.
+together with the metadata information. Since we don’t know a-priori
+which is the ideal number of factors, we can settle on the highest
+number of factor where the model stabilises.
 
 ``` r
 # Load MOFA output
@@ -1344,13 +1352,13 @@ while (before != after & i < 10) {
     ## [1] 4
     ## [1] 5
     ## [1] 6
-    ## Time difference of 0.192194 secs
+    ## Time difference of 0.1666861 secs
     ## [1] 2
     ## [1] 3
     ## [1] 4
     ## [1] 5
     ## [1] 6
-    ## Time difference of 0.2505631 secs
+    ## Time difference of 0.2143788 secs
 
 ``` r
 if(i < 10)
@@ -1680,7 +1688,7 @@ sessionInfo()
     ##  [7] GSEABase_1.58.0      graph_1.74.0         annotate_1.74.0     
     ## [10] XML_3.99-0.13        AnnotationDbi_1.58.0 IRanges_2.30.1      
     ## [13] S4Vectors_0.34.0     Biobase_2.56.0       BiocGenerics_0.42.0 
-    ## [16] reshape2_1.4.4       dplyr_1.1.3          decoupleR_2.5.2     
+    ## [16] reshape2_1.4.4       dplyr_1.1.3          decoupleR_2.9.1     
     ## [19] liana_0.1.5          MOFA2_1.6.0          cosmosR_1.5.2       
     ## [22] readr_2.1.4         
     ## 
@@ -1703,7 +1711,7 @@ sessionInfo()
     ##  [31] farver_2.1.1                bit64_4.0.5                
     ##  [33] rhdf5_2.40.0                basilisk_1.8.1             
     ##  [35] parallelly_1.34.0           vctrs_0.6.1                
-    ##  [37] generics_0.1.3              xfun_0.38                  
+    ##  [37] generics_0.1.3              xfun_0.42                  
     ##  [39] R6_2.5.1                    doParallel_1.0.17          
     ##  [41] GenomeInfoDb_1.32.4         clue_0.3-63                
     ##  [43] rsvd_1.0.5                  locfit_1.5-9.7             
