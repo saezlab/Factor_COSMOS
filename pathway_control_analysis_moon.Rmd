@@ -3,8 +3,7 @@ title: "pathway control analysis moon"
 author: "Aurelien Dugourd"
 date: "`r Sys.Date()`"
 output:
-  md_document:
-    variant: gfm
+  md_document
 ---
 
 ```{r setup, include=FALSE}
@@ -29,7 +28,7 @@ combined_meta_network_translated <- as.data.frame(
 background_nodes <- full_moon_res_combined[abs(full_moon_res_combined$score) > 1,"source"]
 ```
 
-```{r import_gmt function, include=FALSE}
+```{r import_gmt_function, include=FALSE}
 import_gmt <- function(gmtfile, fast = T){
   if(fast)
   {

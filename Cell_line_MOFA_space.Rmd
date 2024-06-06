@@ -3,8 +3,7 @@ title: "Cell_line_MOFA_space"
 author: "Aurelien dugourd"
 date: "`r Sys.Date()`"
 output:
-  md_document:
-    variant: gfm
+  md_document
 ---
 
 ```{r setup, include=FALSE}
@@ -12,7 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 
-```{r Loading packages, message=FALSE}
+```{r Loading_packages, message=FALSE}
 library(decoupleR)
 library(liana)
 library(moon)

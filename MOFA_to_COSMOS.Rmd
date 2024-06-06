@@ -2,7 +2,7 @@
 title: "MOFA-COSMOS pipeline"
 author: "Pascal Lafrenz and Aurelien Dugourd"
 date: "`r Sys.Date()`"
-output: html_document
+output: md_document
 ---
 
 ## MOFA-COSMOS pipeline
@@ -15,20 +15,20 @@ knitr::opts_chunk$set(echo = TRUE)
 
 In this tutorial, we use the new Meta-Footprint Analysis MOON to score a mechanistic network. 
 
-```{r COSMOS installation, message=FALSE}
+```{r COSMOS_installation, message=FALSE}
 #install cosmosR from github directly to obtain the newest version
 if (!requireNamespace("devtools", quietly = TRUE)) install.packages("devtools")
 if (!requireNamespace("cosmosR", quietly = TRUE)) devtools::install_github("saezlab/cosmosR")
 ```
 
 DecoupleR is used to score various regulatory interactions.
-```{r decoupleR installation}
+```{r decoupleR_installation}
 if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
 if (!requireNamespace("decoupleR", quietly = TRUE)) BiocManager::install("saezlab/decoupleR")
 ```
 
 We are using the LIANA package to process the LR interactions.
-```{r LIANA installation}
+```{r LIANA_installation}
 if (!requireNamespace("remotes", quietly = TRUE)) install.packages("remotes")
 if (!requireNamespace("liana", quietly = TRUE)) remotes::install_github('saezlab/liana')
 ```
@@ -41,7 +41,7 @@ numpy installed in your (conda) environment
 (e.g. by using reticulate: reticulate::use_condaenv("base", required = T) %\>% reticulate::conda_install(c("mofapy2","panda","numpy")). 
 For downstream analysis, the R version of MOFA2 is used.
 
-```{r MOFA2 installation, message=FALSE}
+```{r MOFA2_installation, message=FALSE}
 # Install MOFA2 from bioconductor (stable version)
 if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
 if (!requireNamespace("MOFA2", quietly = TRUE)) BiocManager::install("MOFA2")
@@ -54,7 +54,7 @@ and [MOFA2](https://biofam.github.io/MOFA2/tutorials.html).
 For data manipulation, visualization, etc. further packages are needed which 
 are loaded here along with MOFA2 and COSMOS.
 
-```{r Loading packages, message=FALSE}
+```{r Loading_packages, message=FALSE}
 #imports
 library(readr)
 
@@ -98,7 +98,7 @@ transcription factor clustering (see scripts/RNA/Analyze_RNA.R). Further, only
 samples are kept for which each omic is available (however this is not 
 necessary since MOFA2 is able to impute data).
 
-```{r Preparing MOFA input, message=FALSE}
+```{r Preparing_MOFA_input, message=FALSE}
 # Transcriptomics
 ## Load data
 RNA <- as.data.frame(read_csv("data/RNA/RNA_log2_FPKM_clean.csv"))
@@ -197,7 +197,7 @@ and vice-versa. The imperfect correlation between trnaxcripts and proteins
 reflects the complexity of the translation process, as well as protein and RNA 
 stability.
 
-```{r Supp figure condition_prot_RNA_correlation}
+```{r Supp_figure_condition_prot_RNA_correlation}
 condition_prot_RNA_correlation <- sapply(unique(mofa_ready_data$sample), function(condition){
   merged_data <- merge(mofa_ready_data[which(mofa_ready_data$sample == condition & mofa_ready_data$view == "RNA"),-c(1,3)],
                        mofa_ready_data[which(mofa_ready_data$sample == condition & mofa_ready_data$view == "proteo"),-c(1,3)],
@@ -209,7 +209,7 @@ hist(condition_prot_RNA_correlation, breaks = 20)
 ```
 
 
-```{r Supp figure single_prot_RNA_correlation}
+```{r Supp_figure_single_prot_RNA_correlation}
 overlap_genes <- unique(intersect(proteo$feature,RNA$feature))
 single_prot_RNA_correlation <- sapply(overlap_genes, function(gene){
   merged_data <- merge(mofa_ready_data[which(mofa_ready_data$feature == gene & mofa_ready_data$view == "RNA"),-c(2,3)],
@@ -231,7 +231,7 @@ Since we don't know how many factors are needed to explain our data well,
 various maximum numbers of factors are tested. 
 The final results can be found in the results/mofa/ folder.
 
-```{r MOFA options function, include=FALSE}
+```{r MOFA_options_function, include=FALSE}
 write_MOFA_options_file <- function(input_file, 
                                     output_file, 
                                     scale_groups = "False", 
@@ -290,7 +290,7 @@ to the windows store page if it's not. Then, you can run "python3 -m pip install
 in a terminal to install the module to python3.
 
 
-```{r MOFA run, eval=FALSE}
+```{r MOFA_run, eval=FALSE}
 for(i in c(5:15,20,length(unique(mofa_ready_data$sample)))){
 wd <- getwd()
 write_MOFA_options_file(input_file = '/data/mofa/mofa_data.csv', output_file = paste0('/results/mofa/mofa_res_',i,'factor.hdf5'), factors = i, convergence_mode = "slow", likelihoods = c('gaussian','gaussian','gaussian'))
@@ -305,7 +305,7 @@ with the metadata information. Since we don't know a-priori which is the ideal
 number of factors, we can settle on the highest number of factor where the 
 model stabilises. 
 
-```{r Loading MOFA output, message=FALSE, warning=F}
+```{r Loading_MOFA_output, message=FALSE, warning=F}
 # Load MOFA output
 for(i in c(5:15,20,length(unique(mofa_ready_data$sample)))){
   filepath <- paste0('results/mofa/mofa_res_',i,'factor.hdf5')
@@ -321,14 +321,14 @@ for(i in c(5:15,20,length(unique(mofa_ready_data$sample)))){
 
 Then, we can compare the factors from different MOFA models and check on consistency (here: model 7-13).
 
-```{r Compare MOFA models}
+```{r Compare_MOFA_models}
 compare_factors(list(model7,model8,model9,model10,model11,model12,model13), cluster_rows = F, cluster_cols = F,)
 ```
 
 Here, we can see that the inferred MOFA factor weights do not change drastically 
 around 9. For the sake of this tutorial, we choose the 9-factor MOFA model.
 
-```{r Select MOFA model}
+```{r Select_MOFA_model}
 model <- model10
 ```
 
@@ -342,7 +342,7 @@ analysis (PCA).
 An initial metric we can explore is the total variance ($R^2$) explained per 
 view by our MOFA model. This helps us understand how well the model represents the data.
 
-```{r Total variance per factor}
+```{r Total_variance_per_factor}
 # Investigate factors: Explained total variance per view
 plot_variance_explained(model, x="group", y="factor", plot_total = T)[[2]]
 calculate_variance_explained(model)
@@ -361,7 +361,7 @@ that metabolite abundances are in general more cross-correlated than protein
 abundances (due to the underlying regulatory structures, e.i. reaction networks 
 vs protein synthesis and degratation regulatory mechanisms).
 
-```{r Chekc cross correlation of omics compared to variance epxlained}
+```{r Check_cross_correlation_of_omics_compared_to_variance_epxlained}
 #Get the cross correlation for RNA and proteomic data
 RNA <- dcast(mofa_ready_data[which(mofa_ready_data$view == "RNA"),-3], feature~sample, value.var = "value")
 row.names(RNA) <- RNA[,1]
@@ -422,7 +422,7 @@ Since we would like to use the found correlation for downstream COSMOS analysis,
 we first investigate the variance ($R^2$) each factor can explain per view as 
 well as investigate the factor explaining the most variance across all views.
 
-```{r Variance per view per factor}
+```{r Variance_per_view_per_factor}
 # Investigate factors: Explained variance per view for each factor 
 pheatmap(model@cache$variance_explained$r2_per_factor[[1]], display_numbers = T, angle_col = "0", legend_labels = c("0","10", "20", "30", "40", "Variance\n\n"), legend = T, main = "", legend_breaks = c(0,10, 20, 30, 40, max(model@cache$variance_explained$r2_per_factor[[1]])), cluster_rows = F, cluster_cols = F, color = colorRampPalette(c("white","red"))(100), fontsize_number = 10)
 pheatmap(model@cache$variance_explained$r2_per_factor[[1]], display_numbers = T, angle_col = "0", legend_labels = c("0","10", "20", "30", "40", "Variance\n\n"), legend = T, main = "", legend_breaks = c(0,10, 20, 30, 40, max(model@cache$variance_explained$r2_per_factor[[1]])), cluster_rows = F, cluster_cols = F, color = colorRampPalette(c("white","red"))(100), fontsize_number = 10,filename = "results/mofa/variance_heatmap.pdf",width = 4, height = 2.5)
@@ -436,7 +436,7 @@ views, but factor 2 and 4 capture variance across all views. We can also
 analyze the correlation between factors. The next plot highlights the spearman 
 correlation between each factor.
 
-```{r Correlation between factors}
+```{r Correlation_between_factors}
 # Investigate factors: Correlation between factors 
 pdf(file="results/mofa/plot_factor_cor.pdf", height = 5, width = 5)
 plot_factor_cor(model, type = 'upper', method = "spearman", addCoef.col = "black")
@@ -455,7 +455,7 @@ compared to any other tissue categories (e.g. breast tissue vs every other
 tissue types) provide an easy to interpret insight that serves our purpose 
 well. To do so, we use the Univariate Linear Model (ULM) function of decoupleR.
 
-```{r tissue type analysis}
+```{r tissue_type_analysis}
 NCI_60_metadata <- as.data.frame(read_csv(file = "data/metadata/RNA_metadata_cluster.csv"))
 
 #discretize age category so that regression can be applied
@@ -477,7 +477,7 @@ pheatmap(t(tissue_enrichment), show_rownames = T, cluster_cols = F, cluster_rows
 pheatmap(tissue_enrichment, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315,display_numbers = T)
 ```
 Here, we can see that factor 4 seems to be strongly associated with eukemia, and factor 2 with melanoma.
-```{r all metadata analysis}
+```{r all_metadata_analysis}
 
 #format meta-data names
 all_metadata <- reshape2::melt(NCI_60_metadata[,c(1,3,17,5,7,8,10,13,14)], id.vars = "cell_line")
@@ -515,7 +515,7 @@ pheatmap(t(all_metadata_enrichment_top), show_rownames = T, cluster_cols = F, cl
 
 Further, we can inspect the composition of the factors by plotting the top 10 weights per factor and view.
 
-```{r Factor weights per view, fig.height=2.4, fig.width=10}
+```{r Factor_weights_per_view, fig.height=2.4, fig.width=10}
 ## Top 20 factor weights per view
 grid.arrange(
   ### RNA
@@ -555,7 +555,7 @@ transcription factor activities, ligand-receptor scores are estimated.
 First, we have to extract the weights from our MOFA model and keep the 
 weights from Factor 4 in the RNA view.
 
-```{r Extract weights from Model}
+```{r Extract_weights_from_Model}
 weights <- get_weights(model, views = "all", factors = "all")
 
 save(weights, file = "results/mofa/mofa_weights.RData")
@@ -566,7 +566,7 @@ row.names(RNA) <- gsub("_RNA","",row.names(RNA))
 
 Then we load the consensus networks from our databases, as well as the TF-targets regulons from collectri.
 
-```{r Load networks, message=FALSE, warning=FALSE, error=FALSE, results='hide'}
+```{r Load_networks, message=FALSE, warning=FALSE, error=FALSE, results='hide'}
 # Load LIANA (receptor and ligand) consensus network
 # ligrec_ressource <- distinct(liana::decomplexify(liana::select_resource("Consensus")[[1]]))
 # save(ligrec_ressource, file = "support/ligrec_ressource.RData")
@@ -583,7 +583,7 @@ load(file = "support/dorothea_df.RData")
 
 We can display what are the top weights of the model and to which factor they are associated.
 
-```{r RNA across factors, fig.width=4, fig.height=4.3}
+```{r RNA_across_factors, fig.width=4, fig.height=4.3}
 RNA_all <- as.data.frame(weights$RNA) 
 row.names(RNA_all) <- gsub("_RNA","",row.names(RNA_all))
 
@@ -598,7 +598,7 @@ pheatmap(RNA_top, show_rownames = T, cluster_cols = F, cluster_rows = F,color = 
 
 We can do the same for metabolites
 
-```{r Metabs across factors, fig.width=4, fig.height=2.2}
+```{r Metabs_across_factors, fig.width=4, fig.height=2.2}
 metabs_all <- as.data.frame(weights$metab) 
 row.names(metabs_all) <- gsub("_metab","",row.names(metabs_all))
 
@@ -617,7 +617,7 @@ on the task, the minimum number of targets per source varies required to
 maintain the source in the output (e.g. two targets by definition for 
 ligand-receptor interactions). Here can display them as heatmaps.
 
-```{r LR score estimations across factors, fig.width=4, fig.height=4.3}
+```{r LR_score_estimations_across_factors, fig.width=4, fig.height=4.3}
 # Calculate regulatory activities from Receptor and Ligand network
 ligrec_factors <- run_ulm(mat = as.matrix(RNA_all), network = ligrec_geneset, .source = set, .target = gene, minsize = 2) 
 ligrec_factors_df <- wide_ulm_res(ligrec_factors)
@@ -630,7 +630,7 @@ pheatmap(ligrec_factors_df, show_rownames = T, cluster_cols = F, cluster_rows = 
 pheatmap(ligrec_factors_df, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315)
 ```
 
-```{r TF activity estimations across factors, fig.width=4, fig.height=4.3}
+```{r TF_activity_estimations_across_factors, fig.width=4, fig.height=4.3}
 # Calculate regulatory activities from TF network
 TF_factors <- run_ulm(mat = as.matrix(RNA_all), network = dorothea_df, minsize = 10)
 TF_factors <- wide_ulm_res(TF_factors)
@@ -645,7 +645,7 @@ pheatmap(TF_factors, show_rownames = T, cluster_cols = F, cluster_rows = F,color
 These activity estimations are saved in an input file for further downstream 
 analysis as well.
 
-```{r Activity estimations for factor 4}
+```{r Activity_estimations_for_factor_4}
 # Calculate regulatory activities from Receptor and Ligand network
 ligrec_high_vs_low <- run_ulm(mat = as.matrix(RNA), network = ligrec_geneset, .source = set, .target = gene, minsize = 2) 
 ligrec_high_vs_low <- ligrec_high_vs_low[ligrec_high_vs_low$statistic == "ulm",]
@@ -690,7 +690,7 @@ for COSMOS to specifically focus the analysis on pre-computed data-driven result
 Here, in the first step, the data is loaded. Besides the activity estimations 
 and the factor weights, the previous filtered out expressed gene names are loaded.
 
-```{r Load COSMOS input, message=FALSE, warning=FALSE, error=FALSE, results='hide'}
+```{r Load_COSMOS_input, message=FALSE, warning=FALSE, error=FALSE, results='hide'}
 # Load data
 load(file = "data/cosmos/ligrec_TF_moon_inputs.Rdata")
 
@@ -710,7 +710,7 @@ RNA_log2_FPKM <- as.data.frame(read_csv("data/RNA/RNA_log2_FPKM_clean.csv"))$Gen
 
 We can be interested in looking how RNA and corresponding proteins correlate in 
 each factor. We can plot this using scatter plots for each factors.
-```{r correlation RNA/prot, fig.width=7, fig.height=7}
+```{r correlation_RNA_prot, fig.width=7, fig.height=7}
 weights_RNA <- as.data.frame(weights$RNA)
 weights_prot <- as.data.frame(weights$proteo)
 
@@ -752,7 +752,7 @@ First, the RNA factor weights are filtered based on a threshold defined by their
 distribution as well a threshold defined by the distribution of the protein 
 factor weights.
 
-```{r Plot RNA weights and protein weights}
+```{r Plot_RNA_weights_and_protein_weights}
 ##RNA
 {plot(density(RNA_input))
 abline(v = -0.2)
@@ -769,7 +769,7 @@ and 0.05. RNA factor weight values lying inside this threshold are set to 0
 and previously filtered out genes (before MOFA analysis) are also included with 
 value 0.
 
-```{r Filtering RNA weights}
+```{r Filtering_RNA_weights}
 for(gene in names(RNA_input)) {
   if (RNA_input[gene] > -0.2 & RNA_input[gene] < 0.2)
   {
@@ -800,7 +800,7 @@ RNA_input <- c(RNA_input, RNA_log2_FPKM)
 
 The same procedure is repeated for the transcription factor activities.
 
-```{r Plot TF activity estimates}
+```{r Plot_TF_activity_estimates}
 ## Transcription factors
 {plot(density(signaling_input))
 abline(v = -0.5)
@@ -811,14 +811,14 @@ The threshold is set to -0.5 and 3.5 respectively. Further, the
 TF_to_remove variable is later used to remove transcription factors with
 activities below this threshold from the prior knowledge network.
 
-```{r Filtering TF activity estimates}
+```{r Filtering_TF_activity_estimates}
 TF_to_remove <- signaling_input[signaling_input > -0.5 & signaling_input < 3.5]
 signaling_input <- signaling_input[signaling_input < -0.5 | signaling_input > 3.5]
 ```
 
 The same procedure is repeated for the ligand-receptor activities.
 
-```{r Plot Ligand-receptor activity estimates}
+```{r Plot_Ligand_receptor_activity_estimates}
 ## Ligand-receptor interactions
 {plot(density(ligrec_input))
 abline(v = -0.5)
@@ -833,7 +833,7 @@ are adjusted accordingly and if there are multiple mentions of a receptor,
 its activity is calculated by the mean of the associated ligand-receptor 
 interactions.
 
-```{r Filtering ligand-receptor activity estimates}
+```{r Filtering_ligand_receptor_activity_estimates}
 ligrec_input <- ligrec_input[ligrec_input > 2.5 | ligrec_input < -0.5]
 
 rec_inputs <- ligrec_input
@@ -847,7 +847,7 @@ names(rec_inputs) <- receptors
 
 Finally, the same procedure is repeated for the metabolite factor weights.
 
-```{r Plot Metabolite factor weights}
+```{r Plot_Metabolite_factor_weights}
 ## Metabolites
 {plot(density(metab_inputs))
 abline(v = -0.2)
@@ -862,7 +862,7 @@ translated into HMDB format and metabolic compartment codes
 IDs. More information regarding compartment codes can be 
 found [here](http://bigg.ucsd.edu/compartments).
 
-```{r Filtering metabolite factor weights, message=FALSE, warning=FALSE, error=FALSE, results='hide'}
+```{r Filtering_metabolite_factor_weights, message=FALSE, warning=FALSE, error=FALSE, results='hide'}
 metab_to_HMDB <- as.data.frame(
   read_csv("data/metabolomic/MetaboliteToHMDB.csv"))
 metab_to_HMDB <- metab_to_HMDB[metab_to_HMDB$common %in% names(metab_inputs),]
@@ -881,7 +881,7 @@ Since we are not interested in including transcription factors and metabolites
 that were previously filtered out, we also remove the respective nodes from 
 the PKN.
 
-```{r Meta network, warning=F}
+```{r Meta_network, warning=F}
 ## Load and filter meta network
 # data("meta_network")
 # save(meta_network, file = "support/meta_network.RData")
@@ -910,7 +910,7 @@ the metabolite weights by 10 so that they are on a similar scale as the TF
 scores. Other scaling methods can be performed at the user'S discretion,
 this one is just a rough scaling, but good enough in this case.
 
-```{r Merge datasets to input}
+```{r Merge_datasets_to_input}
 # upstream_inputs <- c(rec_inputs)
 # downstream_inputs <- c(metab_inputs*10, signaling_input)
 # 
@@ -931,7 +931,7 @@ flux of signal consistent with the molecular data available.
 In this approach, the network is compressed to avoid having redundant paths in 
 the network leading to inflating the importance of some input measurements. 
 
-```{r Prepare moon input for receptor to TFs and metabs (MOON)}
+```{r Prepare_moon_input_for_receptor_to_TFs_and_metabs_MOON}
 ##filter expressed genes from PKN
 # data("meta_network")
 # save(meta_network, file = "support/meta_network.RData")
@@ -996,7 +996,7 @@ load(file = "support/dorothea_df.RData")
 
 In this step, we format the MOFA weight and activity score information so that it can be appended to the moon network result afterward.
 
-```{r Add activities and weights to network}
+```{r Add_activities_and_weights_to_network}
 data("HMDB_mapper_vec")
 
 ## MOFA weights
@@ -1074,7 +1074,7 @@ feature_weights <- as.data.frame(rbind(TF_weights, rec_weights, lig_weights))
 
 To also identify whether a node is a ligand or receptor we also load the liana consensus LR ressource.
 
-```{r Load consensus}
+```{r Load_consensus}
 # LIANA
 load("support/ligrec_ressource.RData")
 ligrec_df <- ligrec_ressource[,c("source_genesymbol","target_genesymbol")]
@@ -1093,7 +1093,7 @@ the resulting scored network does not include edges incoherent with the RNA and 
 then, the network is decompressed, IDs are translated in a human-friendly format and a subnetowrk comparable to the classic cosmos 
 solution network is generated with the reduce_solution_network function.
 
-```{r Run moon rec_to_TFmetab}
+```{r Run_moon_rec_to_TFmetab}
 meta_network_rec_to_TFmetab <- meta_network_compressed
 
 #We run moon in a loop until TF-target coherence convergences
@@ -1176,7 +1176,7 @@ write_csv(ATT_rec_to_TFmetab,file = "results/cosmos/moon/ATT_rec_TFmetab.csv")
 Next, we also score a network connecting the TF with downstream ligands. 
 The procedure is the same as the previous section, only the upstream and 
 downstream input definition is changing.
-```{r Prepare moon input for TFs to ligands}
+```{r Prepare_moon_input_for_TFs_to_ligands}
 ##filter expressed genes from PKN
 dorothea_PKN <- dorothea_df[,c(1,3,2)]
 names(dorothea_PKN)[2] <- "interaction"
@@ -1224,7 +1224,7 @@ upstream_inputs_filtered <- cosmosR:::filter_input_nodes_not_in_pkn(upstream_inp
 # names(RNA_input) <- gsub("_RNA$","",row.names(weights$RNA))
 ```
 
-```{r run moon TF to lig}
+```{r run_moon_TF_to_lig}
 meta_network_TF_lig <- dorothea_PKN_filtered
 
 write_csv(meta_network_TF_lig, file = "results/cosmos/moon/meta_network_TF_lig.csv")
@@ -1301,7 +1301,7 @@ write_csv(ATT_TF_lig,file = "results/cosmos/moon/ATT_TF_lig.csv")
 Both networks (Receptos -> TF and metabs; TF -> Ligands) are merged together 
 into a single compbined scored network. We also add the conections between 
 ligands and their corresponding receptors.
-```{r combine moon networks}
+```{r combine_moon_networks}
 combined_SIF_moon <- as.data.frame(rbind(SIF_rec_to_TFmetab, SIF_TF_lig))
 combined_SIF_moon <- unique(combined_SIF_moon)
 
@@ -1336,6 +1336,6 @@ given in ./pathway_control_analysis_moon.Rmd and ./Cell_line_MOFA_space.Rmd
 
 ### Session info
 
-```{r Session info}
+```{r Session_info}
 sessionInfo()
 ```
