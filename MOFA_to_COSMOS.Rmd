@@ -2,9 +2,7 @@
 title: "MOFA-COSMOS pipeline"
 author: "Pascal Lafrenz and Aurelien Dugourd"
 date: "`r Sys.Date()`"
-output:
-  md_document:
-    variant: gfm
+output: html_document
 ---
 
 ## MOFA-COSMOS pipeline
@@ -754,7 +752,7 @@ First, the RNA factor weights are filtered based on a threshold defined by their
 distribution as well a threshold defined by the distribution of the protein 
 factor weights.
 
-```{r Plot: RNA weights & protein weights}
+```{r Plot RNA weights and protein weights}
 ##RNA
 {plot(density(RNA_input))
 abline(v = -0.2)
@@ -802,7 +800,7 @@ RNA_input <- c(RNA_input, RNA_log2_FPKM)
 
 The same procedure is repeated for the transcription factor activities.
 
-```{r Plot: TF activity estimates}
+```{r Plot TF activity estimates}
 ## Transcription factors
 {plot(density(signaling_input))
 abline(v = -0.5)
@@ -820,7 +818,7 @@ signaling_input <- signaling_input[signaling_input < -0.5 | signaling_input > 3.
 
 The same procedure is repeated for the ligand-receptor activities.
 
-```{r Plot: Ligand-receptor activity estimates}
+```{r Plot Ligand-receptor activity estimates}
 ## Ligand-receptor interactions
 {plot(density(ligrec_input))
 abline(v = -0.5)
@@ -849,7 +847,7 @@ names(rec_inputs) <- receptors
 
 Finally, the same procedure is repeated for the metabolite factor weights.
 
-```{r Plot: Metabolite factor weights}
+```{r Plot Metabolite factor weights}
 ## Metabolites
 {plot(density(metab_inputs))
 abline(v = -0.2)
