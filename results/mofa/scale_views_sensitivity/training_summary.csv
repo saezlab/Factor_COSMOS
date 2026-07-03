@@ -1,0 +1,3 @@
+model,path,active_factors,iterations,final_elbo,final_recorded_factors
+current_scale_views_false,results/mofa/mofa_res_10factor.hdf5,9,681,-395981.20921231963,9.0
+scale_views_true,results/mofa/mofa_res_10factor_scale_views_true.hdf5,9,672,-542216.4773525901,9.0
