@@ -180,6 +180,8 @@ The final data frame has the following structure:
 
 ```{r MOFA_input}
 head(mofa_ready_data)
+mofa_ready_data_RNA <- mofa_ready_data[mofa_ready_data$view == "RNA",-3]
+save(mofa_ready_data_RNA, file = "data/RNA/mofa_ready_data_RNA.RData")
 ```
 
 We have successfully combined single omic data sets to a long multi-omics data 
@@ -498,6 +500,9 @@ names(all_metadata) <- c("source","target")
   
 Z_matrix <- as.data.frame(model@expectations$Z$single_group)
 
+save(Z_matrix, file = "results/mofa/z_matrix.RData")
+save(all_metadata, file = "support/all_metadata.RData")
+
 #run ULM on the Z matrix meta data to find associated metadata features
 all_metadata_enrichment <- decoupleR::run_ulm(Z_matrix, all_metadata, minsize = 3)
 all_metadata_enrichment <- reshape2::dcast(all_metadata_enrichment, source~condition, value.var = "score")
@@ -594,6 +599,13 @@ RNA_top <- RNA_all[order(apply(RNA_all,1,function(x){max(abs(x))}), decreasing =
 palette <- make_heatmap_color_palette(RNA_top)
 pheatmap(RNA_top, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315, filename = "results/mofa/mofa_top_RNA.pdf", width = 4, height = 4.3)
 pheatmap(RNA_top, show_rownames = T, cluster_cols = F, cluster_rows = F,color = palette, angle_col = 315)
+```
+```{r check qunatiles of weights}
+
+RNA_all_zscore <- as.data.frame(apply(RNA_all,2,function(x){scale(x)}))
+row.names(RNA_all_zscore) <- row.names(RNA_all)
+pnorm(RNA_all_zscore[c("MAPK1","PRKCA","ABL1","JAK1"),"Factor4"])
+
 ```
 
 We can do the same for metabolites
@@ -712,6 +724,7 @@ We can be interested in looking how RNA and corresponding proteins correlate in
 each factor. We can plot this using scatter plots for each factors.
 ```{r correlation_RNA_prot, fig.width=7, fig.height=7}
 weights_RNA <- as.data.frame(weights$RNA)
+save(weights_RNA, file = "results/mofa/weights_RNA.RData")
 weights_prot <- as.data.frame(weights$proteo)
 
 weights_prot$ID <- gsub("_proteo$","",row.names(weights_prot))

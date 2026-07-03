@@ -48,6 +48,22 @@ TF_activity_df <- data.frame(t(data.table::rbindlist(
   fill = TRUE)))
 colnames(TF_activity_df) <- names(TF_activity)
 
+reg_interest <- "STAT3"
+cell_line <- "786-0"
+
+temp <- merge(RNA[,cell_line, drop = F],TF_activity_df[,cell_line,drop = F], by = "row.names")
+
+plot(density(na.omit(as.numeric(RNA[,cell_line]))))
+abline(v = RNA[reg_interest,cell_line])
+
+reg_model <- dorothea_df[dorothea_df$source == reg_interest,]
+reg_model_0 <- merge(reg_model, RNA[,cell_line,drop = F], by.x = "target",by.y = "row.names", all.y = T)
+reg_model_0$mor <- ifelse(is.na(reg_model_0$mor),0,reg_model_0$mor)
+names(reg_model_0)[4] <- "gene_stat"
+
+ggplot(reg_model_0, aes(x = mor, y = gene_stat)) + geom_point() + 
+  geom_smooth(method = "lm", se = T, color = "blue") + theme_minimal() + ggtitle(reg_interest)
+
 # ## Scale the TF activities (obsolete)
 # SDs <- apply(TF_activity_df,1,function(x){sd(x,na.rm = T)})
 # means <- rowMeans(TF_activity_df, na.rm = T)
